@@ -189,6 +189,10 @@ The checkpoint and embeddings must use the same embedding dimension and embeddin
 
 ## Checkpoint
 
+Download the pretrained LoCoMo MPNet checkpoint from the
+[v0.1.0 release](https://github.com/pth2002/ConvMemory/releases/tag/v0.1.0),
+then extract it into `checkpoints/`.
+
 The recommended checkpoint layout is:
 
 ```text
@@ -197,7 +201,14 @@ checkpoints/convmemory-locomo-mpnet/
   model.pt
 ```
 
-`checkpoints/` is intentionally ignored by Git. Publish trained weights through a release artifact or model hosting service instead of committing them to the repository.
+`checkpoints/` is intentionally ignored by Git, so model weights should stay in
+release artifacts or model hosting services rather than the repository history.
+
+After extracting the checkpoint, run:
+
+```bash
+python examples/load_pretrained.py
+```
 
 ## Reproduce The Main Evaluation
 
