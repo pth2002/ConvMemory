@@ -1,6 +1,7 @@
-# Internal Modules
+# Architecture Notes
 
-This note is for developers who want to understand or modify the current research implementation. Most users only need the public `ConvMemory` API.
+This note summarizes the main components behind ConvMemory. Most users only need
+the public `ConvMemory` API.
 
 Runtime code lives in the installable `convmemory/` package:
 
@@ -10,8 +11,8 @@ Runtime code lives in the installable `convmemory/` package:
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
-The root-level `convmem_*.py` files are research helpers used by the reproduction
-scripts. They are not included in the installable wheel.
+The root-level experiment helpers are used by the reproduction scripts. They are
+kept outside the installable wheel so the library API stays small.
 
 ## 1. Temporal Conv/Mixer Encoder
 
@@ -65,11 +66,7 @@ final_score = raw_weight * raw_score + (1 - raw_weight) * convmemory_score
 
 The current best setting usually keeps `raw_weight` near `0` to `0.025`.
 
-## What Is Not Mainline
-
-NSA-style sparse candidate selection was discussed and explored as an idea, but it is not part of the current mainline because it did not produce stable gains in the experiments so far.
-
-For now, the honest module description is:
+The current module description is:
 
 ```text
 Temporal Conv/Mixer + DCA router signal + lexical CE-lite reranking

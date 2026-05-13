@@ -1,9 +1,18 @@
+from pathlib import Path
+
 from convmemory import ConvMemory
 
 
 def main():
+    checkpoint = Path("checkpoints/convmemory-locomo-mpnet")
+    if not (checkpoint / "config.json").exists() or not (checkpoint / "model.pt").exists():
+        raise SystemExit(
+            "Checkpoint not found. Download or place a ConvMemory checkpoint at "
+            "checkpoints/convmemory-locomo-mpnet/ before running this example."
+        )
+
     model = ConvMemory.from_pretrained(
-        "checkpoints/convmemory-locomo-mpnet",
+        checkpoint,
         device="cpu",
     )
     memories = [
