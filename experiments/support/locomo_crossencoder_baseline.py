@@ -8,9 +8,9 @@ import numpy as np
 import torch
 from sentence_transformers import CrossEncoder
 
-from convmem_chain_benchmark import hit_at_k, mrr, recall_at_k
-from convmem_locomo_benchmark import load_locomo_examples
-from convmem_longmemeval import SentenceTransformerTextEncoder, resolve_local_model_path
+from .convmem_chain_benchmark import hit_at_k, mrr, recall_at_k
+from .convmem_locomo_benchmark import load_locomo_examples
+from .convmem_longmemeval import SentenceTransformerTextEncoder, resolve_local_model_path
 
 
 def cosine_scores(query, matrix):

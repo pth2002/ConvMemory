@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from convmem_longmemeval import (
+from .convmem_longmemeval import (
     ConvMemoryEncoder,
     SentenceTransformerTextEncoder,
     TfidfTextEncoder,

@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 from convmemory import ConvMemory
 from convmemory.metrics import hit_at_k, mrr, recall_at_k
 from convmemory.scoring import lexical_signature
-from convmem_longmemeval import (
+from experiments.support.convmem_longmemeval import (
     SentenceTransformerTextEncoder,
     load_longmemeval,
     resolve_local_model_path,

@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from sentence_transformers import CrossEncoder
 
-from convmem_chain_benchmark import (
+from .convmem_chain_benchmark import (
     load_chain_examples,
     prepare_encoded_example,
     recall_at_k,
@@ -19,8 +19,8 @@ from convmem_chain_benchmark import (
     summarize,
     write_csv,
 )
-from convmem_locomo_benchmark import load_locomo_examples
-from convmem_longmemeval import (
+from .convmem_locomo_benchmark import load_locomo_examples
+from .convmem_longmemeval import (
     DCAConvMemoryEncoder,
     MixerConvMemoryEncoder,
     SentenceTransformerTextEncoder,
@@ -28,7 +28,7 @@ from convmem_longmemeval import (
     resolve_local_model_path,
     train_conv,
 )
-from locomo_crossencoder_baseline import choose_split
+from .locomo_crossencoder_baseline import choose_split
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")

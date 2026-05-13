@@ -15,21 +15,21 @@ if str(ROOT) not in sys.path:
 from convmemory import ConvMemoryReranker, RerankConfig
 from convmemory.api import ConvMemory
 from convmemory.metrics import hit_at_k, mrr, recall_at_k
-from convmem_ce_lite import (
+from experiments.support.convmem_ce_lite import (
     CELiteScorer,
     cached_teacher_turn_scores,
     load_teacher_cache,
     save_teacher_cache,
     train_one_item,
 )
-from convmem_chain_benchmark import prepare_encoded_example
-from convmem_locomo_benchmark import load_locomo_examples
-from convmem_longmemeval import (
+from experiments.support.convmem_chain_benchmark import prepare_encoded_example
+from experiments.support.convmem_locomo_benchmark import load_locomo_examples
+from experiments.support.convmem_longmemeval import (
     MixerConvMemoryEncoder,
     SentenceTransformerTextEncoder,
     resolve_local_model_path,
 )
-from locomo_crossencoder_baseline import choose_split
+from experiments.support.locomo_crossencoder_baseline import choose_split
 
 
 def write_csv(path, rows):

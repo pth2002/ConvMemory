@@ -6,14 +6,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from convmem_chain_benchmark import (
+from .convmem_chain_benchmark import (
     evaluate_item,
     load_chain_examples,
     prepare_encoded_example,
     summarize,
     write_csv,
 )
-from convmem_longmemeval import ConvMemoryEncoder, SentenceTransformerTextEncoder, TfidfTextEncoder, train_conv
+from .convmem_longmemeval import ConvMemoryEncoder, SentenceTransformerTextEncoder, TfidfTextEncoder, train_conv
 
 import json
 

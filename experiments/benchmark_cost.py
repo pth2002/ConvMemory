@@ -14,10 +14,10 @@ if str(ROOT) not in sys.path:
 
 from convmemory import ConvMemory
 from convmemory.metrics import hit_at_k, mrr, recall_at_k
-from convmem_chain_benchmark import prepare_encoded_example
-from convmem_locomo_benchmark import load_locomo_examples
-from convmem_longmemeval import SentenceTransformerTextEncoder, resolve_local_model_path
-from locomo_crossencoder_baseline import choose_split
+from experiments.support.convmem_chain_benchmark import prepare_encoded_example
+from experiments.support.convmem_locomo_benchmark import load_locomo_examples
+from experiments.support.convmem_longmemeval import SentenceTransformerTextEncoder, resolve_local_model_path
+from experiments.support.locomo_crossencoder_baseline import choose_split
 
 
 def write_csv(path, rows):
