@@ -267,8 +267,6 @@ ConvMemory is an early open-source research library. The current release focuses
 
 The model is useful today as a lightweight memory reranker, but it is still evolving. The next priorities are broader agent-memory benchmarks, cleaner checkpoint distribution, and further optimization of very large memory pools.
 
-For release steps, see [docs/PUBLISHING.md](docs/PUBLISHING.md).
-
 ## License
 
 MIT
