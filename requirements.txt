@@ -1,0 +1,5 @@
+numpy
+torch
+sentence-transformers
+transformers
+tqdm

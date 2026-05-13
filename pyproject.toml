@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "convmemory"
+version = "0.1.0"
+description = "Lightweight temporal memory reranking for long-term conversational memory."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "ConvMemory contributors" },
+]
+keywords = ["memory", "retrieval", "reranking", "rag", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy",
+    "torch",
+    "sentence-transformers",
+    "transformers",
+    "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/pth2002/ConvMemory"
+Issues = "https://github.com/pth2002/ConvMemory/issues"
+
+[tool.setuptools]
+packages = ["convmemory"]
