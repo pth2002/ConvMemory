@@ -28,6 +28,7 @@ dependencies = [
     "sentence-transformers",
     "transformers",
     "tqdm",
+    "scikit-learn",
 ]
 
 [project.urls]

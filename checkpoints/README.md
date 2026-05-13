@@ -10,6 +10,6 @@ checkpoints/convmemory-locomo-mpnet/
   model.pt
 ```
 
-Model weights are intentionally not committed to Git. For a public release, attach
-the checkpoint as a GitHub Release asset or host it on a model hub, then update the
-README with the download link.
+The pretrained LoCoMo MPNet checkpoint is available from the repository releases.
+Download the archive and extract it into this directory when running pretrained
+examples or evaluations.

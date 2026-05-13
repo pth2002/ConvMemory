@@ -11,8 +11,8 @@ Runtime code lives in the installable `convmemory/` package:
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
-The root-level experiment helpers are used by the reproduction scripts. They are
-kept outside the installable wheel so the library API stays small.
+The `experiments/support/` helpers are used by the reproduction scripts. They
+are kept outside the installable wheel so the library API stays small.
 
 ## 1. Temporal Conv/Mixer Encoder
 
@@ -54,7 +54,7 @@ The CE-lite scorer fuses:
 - DCA router score
 - lexical features
 
-It is not a token-level cross-encoder. It is much cheaper and operates over precomputed embeddings plus lightweight side features.
+It is not a token-level cross-encoder. It operates over precomputed embeddings plus lightweight side features.
 
 ## 5. Raw Dense Score Fusion
 

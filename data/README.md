@@ -9,6 +9,6 @@ data/locomo10.json
 data/longmemeval_s_cleaned.json
 ```
 
-Dataset files are intentionally ignored by Git because they can be large and may
-have separate redistribution terms. The public repository should document where
-to obtain them rather than committing the raw JSON files.
+Raw benchmark files are not included in this repository because they can be large
+and may have separate redistribution terms. Download the datasets from their
+official sources before running the reproduction scripts.

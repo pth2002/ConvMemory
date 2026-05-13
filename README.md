@@ -33,7 +33,7 @@ ConvMemory is not meant to be a general web/document reranker. It is most useful
 
 ## Results
 
-Fresh module-based evaluation on LoCoMo, full test split, MPNet embeddings, top500 candidate pool.
+LoCoMo retrieval-stage evaluation, full test split, MPNet embeddings, top500 candidate pool.
 
 | Method | Test questions | Recall@10 | Hit@10 | MRR |
 |---|---:|---:|---:|---:|
@@ -44,10 +44,10 @@ Fresh module-based evaluation on LoCoMo, full test split, MPNet embeddings, top5
 Interpretation:
 
 - ConvMemory substantially improves over raw dense retrieval.
-- ConvMemory slightly outperforms the tested cross-encoder on Recall@10 and Hit@10.
-- The cross-encoder still has stronger MRR, meaning it is better at placing the best evidence at the very top.
+- ConvMemory has higher Recall@10 and Hit@10 than the tested cross-encoder in this setup.
+- The cross-encoder has stronger MRR, meaning it is better at placing the first relevant evidence near the top.
 
-The practical sweet spot is to use ConvMemory as a cheap memory reranker, or as a first reranking stage before a smaller cross-encoder pass.
+The practical sweet spot is to use ConvMemory as a low-cost memory reranker, or as a first reranking stage before a smaller cross-encoder pass.
 
 Additional zero-shot check: the LoCoMo-trained checkpoint was evaluated on LongMemEval-S, 500 questions, with no LongMemEval training. This is a retrieval-stage evaluation, not the full answer-generation leaderboard.
 
@@ -57,7 +57,7 @@ Additional zero-shot check: the LoCoMo-trained checkpoint was evaluated on LongM
 | Cross-encoder top500 | 500 | 0.882 | 0.934 | 0.933 | 0.956 | 0.890 | 115.6 |
 | ConvMemory zero-shot | 500 | 0.920 | 0.968 | 0.959 | 0.988 | 0.897 | 48.7 |
 
-On this run, ConvMemory is the strongest overall retrieval-stage reranker while being faster than the tested cross-encoder on cached embeddings.
+In this retrieval-stage setup, ConvMemory improves over raw MPNet and the tested cross-encoder on aggregate retrieval metrics while remaining faster than the tested cross-encoder on cached embeddings.
 
 LongMemEval-S distractor stress test: each question's memory pool is expanded with sessions from other questions. ConvMemory and the cross-encoder rerank the raw top500 candidates.
 
@@ -68,7 +68,7 @@ LongMemEval-S distractor stress test: each question's memory pool is expanded wi
 | 1000 sessions, top500 rerank | 0.548 / 0.442 | 0.730 / 0.671 / 519.9 | 0.739 / 0.623 / 862.9 |
 | 1000 sessions, candidate-local + cached lexical | 0.548 / 0.442 | 0.730 / 0.671 / 519.9 | 0.729 / 0.618 / 89.1 |
 
-The optimized 1000-session row uses candidate-local temporal windows and cached memory lexical signatures. It keeps Recall@10 roughly tied with the tested cross-encoder while being about 5.8x faster in online reranking latency. MRR is still lower, so the cross-encoder remains better at placing the best evidence at rank 1.
+The optimized 1000-session row uses candidate-local temporal windows and cached memory lexical signatures. It keeps Recall@10 roughly tied with the tested cross-encoder while being about 5.8x faster in online reranking latency. MRR is still lower, so the cross-encoder remains better at top-rank precision.
 
 The lexical cache is comparable to cached memory embeddings: memory-side signatures can be built when memories are indexed. In the 1000-session run above, preprocessing 18,464 unique memory texts took 10.9s and is not counted in online reranking latency.
 
@@ -189,11 +189,25 @@ The checkpoint and embeddings must use the same embedding dimension and embeddin
 
 ## Checkpoint
 
-Download the pretrained LoCoMo MPNet checkpoint from the
-[v0.1.0 release](https://github.com/pth2002/ConvMemory/releases/tag/v0.1.0),
-then extract it into `checkpoints/`.
+The pretrained LoCoMo MPNet checkpoint is available as a release asset:
 
-The recommended checkpoint layout is:
+- [convmemory-locomo-mpnet.zip](https://github.com/pth2002/ConvMemory/releases/download/v0.1.0/convmemory-locomo-mpnet.zip)
+
+Download and extract the archive from the repository root:
+
+```bash
+mkdir -p checkpoints
+unzip convmemory-locomo-mpnet.zip -d checkpoints
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path checkpoints
+Expand-Archive .\convmemory-locomo-mpnet.zip -DestinationPath .\checkpoints -Force
+```
+
+The resulting layout should be:
 
 ```text
 checkpoints/convmemory-locomo-mpnet/
@@ -201,10 +215,7 @@ checkpoints/convmemory-locomo-mpnet/
   model.pt
 ```
 
-`checkpoints/` is intentionally ignored by Git, so model weights should stay in
-release artifacts or model hosting services rather than the repository history.
-
-After extracting the checkpoint, run:
+After extracting the checkpoint, verify loading with:
 
 ```bash
 python examples/load_pretrained.py
