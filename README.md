@@ -72,6 +72,38 @@ Interpretation:
 
 The practical sweet spot is to use ConvMemory as a low-cost memory reranker, or as a first reranking stage before a smaller cross-encoder pass.
 
+## v0.2 Context Expansion Results
+
+The v0.2 expansion experiments evaluate a conservative agent-memory setting:
+
+```text
+Keep the strongest ConvMemory memories -> fill a wider context with complementary candidates
+```
+
+Evaluation uses LoCoMo test questions with MPNet embeddings across three split seeds. Deltas are measured against the v0.1 ConvMemory top-k baseline at the same final context size. The reported multi-expert policies use complementary ConvMemory rankings; the public API supports the same pattern through `expert_rankers`, while the single-checkpoint default remains the simplest deployment path.
+
+| Protected memories | Final context | Expansion policy | Mean delta Recall | Worst-seed delta Recall | Mean delta Hit | Mean delta MRR@K |
+|---:|---:|---|---:|---:|---:|---:|
+| 5 | 8 | append anchor-0.30 | +0.0078 | +0.0031 | +0.0070 | +0.00084 |
+| 8 | 15 | round-robin anchors | +0.0052 | +0.0020 | +0.0064 | +0.00050 |
+| 10 | 12 | append coverage expert | +0.0036 | +0.0008 | +0.0041 | +0.00036 |
+| 10 | 15 | round-robin anchors | +0.0050 | +0.0017 | +0.0064 | +0.00044 |
+| 10 | 20 | append coverage expert | +0.0016 | +0.0013 | +0.0027 | +0.00023 |
+
+The strongest practical setting is usually `protected_k=10`, `context_budget=15`: it keeps the reliable top-10 memory prefix and adds a small number of exploratory candidates.
+
+Mechanism check on LoCoMo seed 23, `protected_k=10`, `context_budget=15`:
+
+| Query bucket | Questions | Delta Recall | Delta Hit | Reading |
+|---|---:|---:|---:|---|
+| v0.1 already found all gold memories | 714 | -0.0025 | -0.0014 | mostly unchanged |
+| v0.1 missed the evidence | 132 | +0.0587 | +0.0682 | main benefit |
+| v0.1 found partial evidence | 91 | +0.0018 | -0.0110 | mixed |
+
+This means v0.2 is best understood as a recall-oriented memory context expander. It is useful when an agent can read a slightly larger memory context and missing a key memory is more costly than including a few extra candidates. It is not meant to replace the main reranker or improve top-1 precision on every query.
+
+Boundary check: on LongMemEval-S, the v0.1 checkpoint is already close to saturated at larger k, so context expansion gives little or inconsistent benefit. The current claim is therefore specific to harder LoCoMo-like long-term conversational memory retrieval.
+
 Additional zero-shot check: the LoCoMo-trained checkpoint was evaluated on LongMemEval-S, 500 questions, with no LongMemEval training. This is a retrieval-stage evaluation, not the full answer-generation leaderboard.
 
 | Method | Questions | Recall@5 | Hit@5 | Recall@10 | Hit@10 | MRR | ms/query |
