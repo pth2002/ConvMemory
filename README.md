@@ -2,6 +2,8 @@
 
 Lightweight temporal reranking for long-term conversational and agent memory.
 
+Current package version: `v0.2.0`.
+
 ConvMemory sits between a fast vector retriever and an expensive cross-encoder. It is designed for memory systems where records are ordered over time, such as multi-session conversations, user profiles, agent scratchpads, and event histories.
 
 It does not replace your vector database. It reranks the candidate memories your retriever already found, and can optionally expand the final memory context when your agent has room for a few additional evidence candidates.
@@ -9,6 +11,16 @@ It does not replace your vector database. It reranks the candidate memories your
 ```text
 User query -> vector search top-k -> ConvMemory rerank/expand -> memory context for your agent
 ```
+
+## What's New In v0.2
+
+ConvMemory v0.2 adds a public context-expansion API for agent memory systems:
+
+- `retrieve(..., mode="rerank")`: the standard ConvMemory reranker.
+- `retrieve(..., mode="expand")`: protect the strongest reranked memories, then fill a larger context budget with complementary candidates.
+- `expand_context(...)` and `expand_context_embeddings(...)`: explicit APIs for systems that separate retrieval, memory storage, and prompt construction.
+
+The v0.2 API is compatible with the existing LoCoMo MPNet checkpoint. No new checkpoint is required to use context expansion.
 
 ## Why ConvMemory?
 
@@ -235,6 +247,8 @@ The pretrained LoCoMo MPNet checkpoint is available as a release asset:
 
 - [convmemory-locomo-mpnet.zip](https://github.com/pth2002/ConvMemory/releases/download/v0.1.0/convmemory-locomo-mpnet.zip)
 
+This checkpoint was released with `v0.1.0` and remains the recommended checkpoint for `v0.2.0`. The v0.2 context-expansion API reuses the same reranker weights and does not require a separate model file.
+
 Download and extract the archive from the repository root:
 
 ```bash
@@ -321,7 +335,7 @@ For the large-pool optimized path, add:
 
 ## Project Status
 
-ConvMemory is an early open-source research library. The current release focuses on:
+ConvMemory is an early open-source research library. The current package release is `v0.2.0` and focuses on:
 
 - a simple public API;
 - reusable pretrained checkpoint loading;
