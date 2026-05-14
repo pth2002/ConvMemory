@@ -4,10 +4,10 @@ Lightweight temporal reranking for long-term conversational and agent memory.
 
 ConvMemory sits between a fast vector retriever and an expensive cross-encoder. It is designed for memory systems where records are ordered over time, such as multi-session conversations, user profiles, agent scratchpads, and event histories.
 
-It does not replace your vector database. It reranks the candidate memories your retriever already found.
+It does not replace your vector database. It reranks the candidate memories your retriever already found, and can optionally expand the final memory context when your agent has room for a few additional evidence candidates.
 
 ```text
-User query -> vector search top-k -> ConvMemory rerank -> memory context for your agent
+User query -> vector search top-k -> ConvMemory rerank/expand -> memory context for your agent
 ```
 
 ## Why ConvMemory?
@@ -30,6 +30,17 @@ Use ConvMemory when:
 - Cross-encoder reranking over hundreds of candidates is too slow or too costly.
 
 ConvMemory is not meant to be a general web/document reranker. It is most useful for long-term memory traces where neighboring memories can provide signal.
+
+## Retrieval Modes
+
+ConvMemory exposes two public modes:
+
+| Mode | Use when | Output |
+|---|---|---|
+| `rerank` | You need the strongest ordered top-k memories. | A ConvMemory reranked list. |
+| `expand` | Your agent can read a slightly wider memory context and missing evidence is costly. | The protected ConvMemory top-k plus complementary candidates. |
+
+The expansion mode is intentionally conservative: it keeps the strongest reranked memories at the front, then fills the remaining context budget from complementary rankings such as raw dense retrieval, candidate-local temporal windows, and optional extra ConvMemory checkpoints.
 
 ## Results
 
@@ -127,6 +138,20 @@ for item in results:
 
 Memory order matters. Pass memories in chronological order whenever possible.
 
+To build a wider memory context for an agent, use `mode="expand"`:
+
+```python
+context = model.retrieve(
+    "When is the hiking trip?",
+    memories,
+    mode="expand",
+    protected_k=10,
+    top_k=15,
+)
+```
+
+This protects the first 10 ConvMemory-ranked memories and fills the remaining 5 slots with complementary candidates. For explicit code, the same behavior is available as `expand_context(...)`.
+
 ## In An Agent Memory Pipeline
 
 ConvMemory is usually called after vector search and before prompt construction.
@@ -139,12 +164,14 @@ memory_reranker = ConvMemory.from_pretrained(
     device="cuda",
 )
 
-def retrieve_agent_memory(query, memory_store, top_k=20):
+def retrieve_agent_memory(query, memory_store, top_k=15):
     candidates = memory_store.vector_search(query, top_k=500)
 
-    ranked = memory_reranker.rerank(
+    ranked = memory_reranker.retrieve(
         query=query,
         memories=candidates,
+        mode="expand",
+        protected_k=10,
         top_k=top_k,
     )
 
@@ -166,6 +193,21 @@ ranked = memory_reranker.rerank(
     candidate_ids=candidate_ids,
     top_k=20,
     window_mode="candidate_local",
+)
+```
+
+For context expansion over precomputed embeddings:
+
+```python
+context = memory_reranker.expand_context_embeddings(
+    query_embedding=query_embedding,
+    memory_embeddings=memory_embeddings,
+    memory_ids=memory_ids,
+    memory_texts=memory_texts,
+    candidate_indices=candidate_indices,
+    query=query,
+    protected_k=10,
+    context_budget=15,
 )
 ```
 
@@ -284,6 +326,7 @@ ConvMemory is an early open-source research library. The current release focuses
 - a simple public API;
 - reusable pretrained checkpoint loading;
 - memory reranking over text or precomputed embeddings;
+- conservative memory context expansion for agent prompt construction;
 - reproducible LoCoMo evaluation scripts;
 - honest quality and latency reporting.
 

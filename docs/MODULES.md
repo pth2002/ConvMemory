@@ -14,6 +14,19 @@ Runtime code lives in the installable `convmemory/` package:
 The `experiments/support/` helpers are used by the reproduction scripts. They
 are kept outside the installable wheel so the library API stays small.
 
+## Public API Modes
+
+The public API intentionally exposes two stable modes:
+
+- `rerank`: score and reorder candidate memories.
+- `expand`: keep a protected reranked prefix, then add complementary candidates
+  for a wider agent memory context.
+
+The expansion mode is a context-construction layer, not a separate neural
+architecture. It is designed for agent systems where the downstream LLM can read
+more than the strict top-k and missing a key memory is worse than including a
+few additional candidates.
+
 ## 1. Temporal Conv/Mixer Encoder
 
 The core memory encoder reads a short temporal window of memory embeddings:
@@ -71,3 +84,12 @@ The current module description is:
 ```text
 Temporal Conv/Mixer + DCA router signal + lexical CE-lite reranking
 ```
+
+## 6. Context Expansion
+
+`ConvMemory.expand_context(...)` and `ConvMemory.retrieve(..., mode="expand")`
+protect the strongest ConvMemory results, then fill the remaining context budget
+from complementary rankings. The default `balanced` policy uses the main
+ConvMemory ranking, raw dense retrieval, and candidate-local temporal scoring.
+Advanced users can pass additional ConvMemory checkpoints as expert rankers, but
+the default interface keeps these details optional.
