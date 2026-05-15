@@ -26,8 +26,8 @@ Current version: `v0.3.0`
 - Drop-in API for agent memory pipelines: `rerank`, `retrieve`, and `expand`.
 - Candidate-local scoring for large memory pools.
 - Compression-aware routing utilities for session notes or block summaries.
-- Reproducible LoCoMo and LongMemEval retrieval-stage evaluation scripts.
-- Research-preview cascade fusion with cross-encoder reranking.
+- Reproducible retrieval-stage evaluation scripts for LoCoMo and LongMemEval-S.
+- Research-preview cascade experiments with a small cross-encoder pass.
 
 ## Installation
 
@@ -286,15 +286,25 @@ ranked = model.rerank_embeddings(
 The router is deliberately separate from the neural reranker. It only returns
 candidate ids or indices, so it can be used with existing memory stores.
 
-## Benchmarks
+## Preliminary Benchmarks
 
-All reported numbers are retrieval-stage evaluations. They do not measure
-end-to-end answer generation. Latency numbers measure online reranking after
-memory embeddings and memory-side indexes are available.
+These numbers are intended to make the current checkpoint inspectable, not to
+claim state-of-the-art reranking.
+
+Scope:
+
+- All numbers are retrieval-stage evaluations, not end-to-end answer generation.
+- The public checkpoint is trained on LoCoMo, so LoCoMo results are in-domain.
+- LongMemEval-S is an out-of-domain check within the same long-memory task family.
+- Reported cross-encoder baselines use `cross-encoder/ms-marco-MiniLM-L-6-v2`.
+- Latency measures online reranking after memory embeddings and memory-side
+  indexes are available.
+- Statistical confidence intervals, stronger rerankers, more embedding
+  backbones, and full ablations are still future work.
 
 ### LoCoMo
 
-LoCoMo full test split, MPNet embeddings, top500 candidate pool.
+In-domain LoCoMo test split, MPNet embeddings, top500 candidate pool.
 
 | Method | Questions | Recall@10 | Hit@10 | MRR |
 |---|---:|---:|---:|---:|
@@ -302,20 +312,22 @@ LoCoMo full test split, MPNet embeddings, top500 candidate pool.
 | Cross-encoder top500 | 937 | 0.749 | 0.790 | 0.614 |
 | ConvMemory top500 | 937 | 0.768 | 0.821 | 0.554 |
 
-ConvMemory improves recall-oriented memory selection over raw dense retrieval.
-The tested cross-encoder remains stronger at top-rank precision, reflected by
-MRR.
+In this setting, ConvMemory improves recall-oriented memory selection over raw
+dense retrieval. The tested cross-encoder remains stronger at top-rank
+precision, reflected by MRR. This table should not be read as a general claim
+that ConvMemory outperforms cross-encoders.
 
-### LongMemEval-S Zero-Shot
+### LongMemEval-S OOD Check
 
 LoCoMo-trained ConvMemory checkpoint evaluated on LongMemEval-S without
-LongMemEval training.
+LongMemEval training. This is a same-family out-of-domain retrieval check, not
+a broad generalization claim.
 
 | Method | Questions | Recall@5 | Hit@5 | Recall@10 | Hit@10 | MRR | ms/query |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Raw MPNet retrieval | 500 | 0.823 | 0.902 | 0.905 | 0.946 | 0.783 | 0.0 |
 | Cross-encoder top500 | 500 | 0.882 | 0.934 | 0.933 | 0.956 | 0.890 | 115.6 |
-| ConvMemory zero-shot | 500 | 0.920 | 0.968 | 0.959 | 0.988 | 0.897 | 48.7 |
+| ConvMemory LoCoMo checkpoint | 500 | 0.920 | 0.968 | 0.959 | 0.988 | 0.897 | 48.7 |
 
 ### Large-Pool Stress Test
 
@@ -332,16 +344,21 @@ The optimized 1000-session setting uses candidate-local temporal windows and
 cached lexical signatures. Memory-side lexical signatures are built once when
 the memory store is indexed, similar to cached embeddings.
 
+The latency comparison in this stress test should be treated as an engineering
+measurement for this implementation, not as an apples-to-apples benchmark
+against optimized production cross-encoder serving.
+
 ## Cascade Fusion Preview
 
-The strongest current research-preview path is:
+The current cascade experiment uses ConvMemory as a candidate stage before a
+small cross-encoder pass:
 
 ```text
 vector top500 -> ConvMemory top100 -> cross-encoder -> normalized score fusion
 ```
 
-This uses ConvMemory to build a smaller high-recall candidate set, then applies
-a cross-encoder only to that reduced set.
+The goal is cost-quality tradeoff: use ConvMemory to build a smaller candidate
+set, then apply a cross-encoder only to that reduced set.
 
 LoCoMo test splits, seeds 7/11/23, MPNet embeddings,
 `cross-encoder/ms-marco-MiniLM-L-6-v2`.
@@ -352,6 +369,10 @@ LoCoMo test splits, seeds 7/11/23, MPNet embeddings,
 | ConvMemory balanced | 0.7798 | 0.8361 | 0.5698 | 0.0 |
 | ConvMemory + CE fusion top100 | 0.7908 | 0.8425 | 0.6124 | 100.0 |
 
+`ConvMemory balanced` refers to the current balanced candidate-routing preset:
+raw dense anchors plus compressed-note routing, followed by ConvMemory reranking
+and no cross-encoder scoring.
+
 RTX 4090 latency benchmark, 600 LoCoMo test queries, 10 warmup queries per seed.
 
 | Method | Recall@10 | Hit@10 | MRR@10 | Mean ms/query | P95 ms/query | Speedup vs CE top500 |
@@ -361,7 +382,10 @@ RTX 4090 latency benchmark, 600 LoCoMo test queries, 10 warmup queries per seed.
 | ConvMemory + CE fusion top100 | 0.7487 | 0.8033 | 0.5887 | 38.2 | 43.9 | 2.74x |
 
 Cascade fusion is not yet a stable public API. The scripts are included so the
-results can be inspected and reproduced before the interface is finalized.
+results can be inspected and reproduced before the interface is finalized. The
+current results should be interpreted as evidence that ConvMemory can provide a
+useful candidate stage for a small cross-encoder pass, not as proof that the
+model is a universal cross-encoder replacement.
 
 ## Reproducibility
 
@@ -411,7 +435,7 @@ python experiments/v036_latency_benchmark.py \
   --out results/v036/latency_benchmark
 ```
 
-LongMemEval-S zero-shot evaluation:
+LongMemEval-S OOD evaluation:
 
 ```bash
 python experiments/evaluate_longmemeval_zero_shot.py \
@@ -447,6 +471,18 @@ ConvMemory is an early research library. The stable public surface in v0.3 is:
 
 The cascade-fusion path is currently provided as reproducible research code in
 `experiments/`. A dedicated public cascade API is planned for a later release.
+
+Important open items before making stronger research claims:
+
+- report mean/std and paired significance tests across more seeds;
+- evaluate stronger rerankers and additional embedding backbones;
+- add simple baselines such as BM25, recency-weighted dense retrieval, and
+  dense-lexical fusion;
+- publish ablations for temporal windows, lexical features, routing, raw-score
+  fusion, and candidate-local scoring;
+- add a training script, model card, and training-data details;
+- test robustness to missing or noisy memory order;
+- add qualitative error analysis and calibration checks.
 
 ## License
 
