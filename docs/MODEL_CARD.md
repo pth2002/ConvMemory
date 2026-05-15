@@ -80,8 +80,9 @@ Known evaluation gaps:
 - limited cross-encoder baselines;
 - limited embedding backbone coverage;
 - incomplete trained-ablation matrix;
-- no published paired significance table for all headline claims yet;
-- limited robustness analysis for noisy or missing memory order.
+- paired significance tests are currently limited to the v0.40 LoCoMo runs;
+- order robustness has been tested with synthetic perturbations on LoCoMo, but
+  real missing/noisy timestamp behavior still needs broader validation.
 
 The v0.40-v0.43 scripts were added to address these gaps systematically.
 
