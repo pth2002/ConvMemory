@@ -2,7 +2,7 @@
 
 Lightweight temporal reranking for long-term conversational and agent memory.
 
-Current package version: `v0.2.0`.
+Current package version: `v0.3.0`.
 
 ConvMemory sits between a fast vector retriever and an expensive cross-encoder. It is designed for memory systems where records are ordered over time, such as multi-session conversations, user profiles, agent scratchpads, and event histories.
 
@@ -12,17 +12,18 @@ It does not replace your vector database. It reranks the candidate memories your
 User query -> vector search top-k -> ConvMemory rerank/expand -> memory context for your agent
 ```
 
-Research preview: ConvMemory can also act as a high-coverage candidate stage before a small cross-encoder pass. The current public package keeps this cascade path in `experiments/` while the stable API remains focused on `rerank` and `expand`.
+Research preview: ConvMemory can also act as a high-coverage candidate stage before a small cross-encoder pass. The current public package keeps this cascade path in `experiments/` while the stable API remains focused on `rerank`, `expand`, and lightweight routing utilities.
 
-## What's New In v0.2
+## What's New In v0.3
 
-ConvMemory v0.2 adds a public context-expansion API for agent memory systems:
+ConvMemory v0.3 keeps the public reranking API small while adding the research and routing pieces needed for larger memory systems:
 
-- `retrieve(..., mode="rerank")`: the standard ConvMemory reranker.
-- `retrieve(..., mode="expand")`: protect the strongest reranked memories, then fill a larger context budget with complementary candidates.
-- `expand_context(...)` and `expand_context_embeddings(...)`: explicit APIs for systems that separate retrieval, memory storage, and prompt construction.
+- `CompressionRouter` and `build_compressed_notes(...)`: route from compressed notes or session blocks back to raw memory candidates before reranking.
+- Cascade-fusion experiments: use ConvMemory as a high-recall candidate stage before a smaller cross-encoder pass.
+- RTX 4090 latency benchmarks for ConvMemory, cross-encoder reranking, and ConvMemory + cross-encoder fusion.
+- The v0.2 `rerank` and `expand` APIs remain unchanged.
 
-The v0.2 API is compatible with the existing LoCoMo MPNet checkpoint. No new checkpoint is required to use context expansion.
+No new ConvMemory checkpoint is required for v0.3. The LoCoMo MPNet checkpoint remains the recommended public checkpoint.
 
 ## Why ConvMemory?
 
@@ -308,7 +309,7 @@ The pretrained LoCoMo MPNet checkpoint is available as a release asset:
 
 - [convmemory-locomo-mpnet.zip](https://github.com/pth2002/ConvMemory/releases/download/v0.1.0/convmemory-locomo-mpnet.zip)
 
-This checkpoint was released with `v0.1.0` and remains the recommended checkpoint for `v0.2.0`. The v0.2 context-expansion API reuses the same reranker weights and does not require a separate model file.
+This checkpoint was released with `v0.1.0` and remains the recommended checkpoint for `v0.3.0`. The v0.2 context-expansion API and v0.3 routing/cascade experiments reuse the same ConvMemory reranker weights and do not require a separate ConvMemory model file.
 
 Download and extract the archive from the repository root:
 
@@ -425,13 +426,15 @@ For the large-pool optimized path, add:
 
 ## Project Status
 
-ConvMemory is an early open-source research library. The current package release is `v0.2.0` and focuses on:
+ConvMemory is an early open-source research library. The current package release is `v0.3.0` and focuses on:
 
 - a simple public API;
 - reusable pretrained checkpoint loading;
 - memory reranking over text or precomputed embeddings;
 - conservative memory context expansion for agent prompt construction;
+- compressed-note routing utilities for larger memory stores;
 - reproducible LoCoMo evaluation scripts;
+- cascade-fusion research scripts for ConvMemory plus a small cross-encoder pass;
 - honest quality and latency reporting.
 
 The model is useful today as a lightweight memory reranker, but it is still evolving. The next priorities are broader agent-memory benchmarks, cleaner checkpoint distribution, further optimization of very large memory pools, and turning the cascade-fusion research path into a clean optional API.
