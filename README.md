@@ -261,10 +261,18 @@ Five split seeds, MPNet embeddings, top500 candidate pool.
 | BM25 | 0.5889 | 0.6361 | 0.4305 |
 | Dense + lexical + temporal RRF | 0.6375 | 0.6910 | 0.3997 |
 | Dense + lexical score fusion | 0.6579 | 0.7148 | 0.4682 |
+| MiniLM cross-encoder top500 | 0.7294 +/- 0.0151 | 0.7765 | 0.5968 +/- 0.0132 |
 | ConvMemory | 0.7798 +/- 0.0074 | 0.8350 | 0.5824 +/- 0.0189 |
 
-Paired bootstrap on a 750-question CE subset shows ConvMemory improves over raw
-dense retrieval by +0.2161 Recall@10, 95% CI [+0.1831, +0.2502].
+Paired bootstrap over 4,955 test questions:
+
+- ConvMemory vs raw dense: +0.2465 Recall@10, 95% CI [+0.2338, +0.2594], p < 0.001.
+- ConvMemory vs MiniLM cross-encoder top500: +0.0508 Recall@10, 95% CI [+0.0407, +0.0609], p < 0.001.
+- ConvMemory vs MiniLM cross-encoder top500: -0.0139 MRR, 95% CI [-0.0238, -0.0043], p = 0.0038.
+
+Interpretation: ConvMemory is stronger on recall coverage in this memory
+setting, while the tested cross-encoder keeps a small but significant advantage
+in top-rank precision.
 
 ### Feature Ablations
 
@@ -323,6 +331,16 @@ This suggests ConvMemory benefits from local memory-neighborhood coherence, not
 from a fragile assumption that absolute chronological order must always be
 perfect.
 
+If timestamps are unreliable, use ConvMemory more conservatively:
+
+- prefer `mode="expand"` so the downstream agent receives a slightly wider
+  context;
+- keep raw dense candidates in the final context budget;
+- avoid interpreting scores as calibrated confidence when memory order is known
+  to be corrupted;
+- consider disabling temporal features or retraining with order noise before
+  using ConvMemory as a strict top-k gate.
+
 ### Same-Family OOD Check
 
 LoCoMo-trained checkpoint evaluated on LongMemEval-S without LongMemEval
@@ -335,8 +353,30 @@ claim.
 | MiniLM cross-encoder top500 | 500 | 0.933 | 0.956 | 0.890 |
 | ConvMemory LoCoMo checkpoint | 500 | 0.959 | 0.988 | 0.897 |
 
-More external datasets and stronger reranker baselines are still needed before
-making broad claims.
+Paired bootstrap on the fixed 500-question LongMemEval-S set:
+
+- ConvMemory vs raw MPNet: +0.0544 Recall@10, 95% CI [+0.0351, +0.0742], p < 0.001.
+- ConvMemory vs MiniLM cross-encoder: +0.0261 Recall@10, 95% CI [+0.0065, +0.0461], p = 0.0088.
+- ConvMemory vs MiniLM cross-encoder on MRR: +0.0069, 95% CI [-0.0179, +0.0320], not significant.
+
+Stress setting: LongMemEval-S with each question expanded to a 1000-session
+memory pool. Five distractor seeds, candidate-local ConvMemory, top500
+reranking.
+
+| Method | Recall@10 | Hit@10 | MRR | Mean ms/query |
+|---|---:|---:|---:|---:|
+| Raw MPNet retrieval | 0.5408 +/- 0.0054 | 0.6704 | 0.4400 +/- 0.0062 | 0.1 |
+| ConvMemory candidate-local | 0.7258 +/- 0.0041 | 0.8280 | 0.6060 +/- 0.0077 | 76.6 |
+| MiniLM cross-encoder top500 | 0.7312 +/- 0.0021 | 0.8440 | 0.6722 +/- 0.0052 | 954.6 |
+
+In the 1000-session stress setting, ConvMemory improves over raw MPNet by
++0.1850 Recall@10, 95% CI [+0.1708, +0.1995]. The Recall@10 gap between
+ConvMemory and MiniLM cross-encoder is not significant, but the cross-encoder
+has significantly better MRR.
+
+The repository also includes `v043_generic_retrieval_eval.py` for converted
+external datasets. A synthetic agent-scratchpad sanity check confirms the JSONL
+adapter works, but it is not a public OOD benchmark.
 
 ## What The Results Show
 
@@ -351,6 +391,8 @@ Supported by the current experiments:
   MiniLM cross-encoder.
 - ConvMemory can improve a small cross-encoder cascade by providing a better
   candidate pool.
+- Same-family OOD checks on LongMemEval-S show transfer beyond LoCoMo, including
+  a 1000-session stress setting.
 
 Not yet shown:
 
@@ -358,7 +400,7 @@ Not yet shown:
 - Robustness across many unrelated datasets.
 - Superiority over stronger rerankers such as BGE, Jina, or mxbai rerankers.
 - End-to-end answer-generation improvement.
-- Fully calibrated cross-query confidence scores.
+- Production-grade calibrated cross-query thresholding.
 
 ## Reproducibility
 
@@ -391,6 +433,20 @@ python experiments/v036_latency_benchmark.py \
   --warmup 10 \
   --cross-batch-size 512 \
   --out results/v036/latency_benchmark
+
+python experiments/evaluate_longmemeval_zero_shot.py \
+  --device cuda \
+  --checkpoint checkpoints/convmemory-locomo-mpnet \
+  --encoder-model sentence-transformers/all-mpnet-base-v2 \
+  --candidate-top-n 500 \
+  --eval-cross-encoder \
+  --cross-encoder-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --cross-batch-size 512 \
+  --out results/v044/longmemeval_clean_fixed500
+
+python experiments/v046_calibrate_confidence.py \
+  --cases results/v042/error_calibration_mpnet/cases.csv \
+  --out results/v046/confidence_calibration_mpnet
 ```
 
 For the full evaluation plan, see

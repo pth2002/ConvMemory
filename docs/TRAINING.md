@@ -27,6 +27,8 @@ python experiments/train_locomo.py \
 
 The current LoCoMo scripts split by conversation/sample id through `choose_split(...)`, not by random QA rows. This reduces leakage where QA pairs from the same conversation appear in both dev and test.
 
+By default, `--dev-ratio 0.5` is used by the evaluation helpers: conversation/sample ids are shuffled with the requested seed, half are assigned to the dev/training side, and the remaining ids are held out for test. The split is therefore conversation-level rather than QA-row-level. Before reporting a new checkpoint, verify that no test `question_id` sample prefix appears in the train/dev set for the same seed.
+
 Recommended reporting:
 
 - run at least five split seeds;

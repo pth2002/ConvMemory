@@ -76,11 +76,13 @@ Current public results are retrieval-stage evaluations. They measure whether evi
 
 Known evaluation gaps:
 
-- limited out-of-domain datasets;
+- out-of-domain coverage is still limited to same-family LongMemEval-S plus a
+  synthetic agent-scratchpad sanity check;
 - limited cross-encoder baselines;
 - limited embedding backbone coverage;
 - incomplete trained-ablation matrix;
-- paired significance tests are currently limited to the v0.40 LoCoMo runs;
+- paired significance tests are available for the main LoCoMo and LongMemEval-S
+  comparisons, but not for every exploratory experiment;
 - order robustness has been tested with synthetic perturbations on LoCoMo, but
   real missing/noisy timestamp behavior still needs broader validation.
 
@@ -89,7 +91,9 @@ The v0.40-v0.43 scripts were added to address these gaps systematically.
 ## Limitations
 
 - Memory order matters. If timestamps are missing or severely corrupted, quality may degrade.
-- Scores are not yet calibrated for cross-query thresholding.
+- Scores are not calibrated by default. A post-hoc confidence calibration script
+  is provided in `experiments/v046_calibrate_confidence.py`, but production
+  thresholding should be validated on application data.
 - The public checkpoint is optimized for the MPNet embedding space; other embedding backbones require retraining or at least careful validation.
 - The model is a reranker, not a vector database and not a full QA system.
 - Cascade fusion with a cross-encoder is currently research-preview code, not a stable public API.

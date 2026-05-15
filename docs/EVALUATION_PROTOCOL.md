@@ -2,6 +2,27 @@
 
 This protocol turns the main review concerns into concrete experiments.
 
+## Completion Status
+
+This table distinguishes experiments that have been run from protocol items
+that are still planned. A command appearing later in this document is not a
+claim that the result has already been completed.
+
+| Item | Status | Evidence path | Notes |
+|---|---|---|---|
+| MPNet + LoCoMo simple baselines / feature masks, 5 seeds | Done | `results/v040/baselines_ablation_stats_mpnet` | In-domain checkpoint evaluation. |
+| MPNet + LoCoMo order robustness, 5 seeds | Done | `results/v041/order_robustness_mpnet` | Synthetic order perturbations. |
+| MPNet + LoCoMo error analysis / calibration bins, 5 seeds | Done | `results/v042/error_calibration_mpnet` | Diagnostic confidence features. |
+| Post-hoc confidence calibration | Done | `results/v046/confidence_calibration_mpnet` | Platt/logistic and isotonic calibration over v0.42 cases. |
+| MPNet + MiniLM-L6 LoCoMo CE top500, 5 seeds | Done | `results/v040/minilm_ce_top500_5seed_full` | Includes paired bootstrap for ConvMemory vs MiniLM CE. |
+| MPNet + LongMemEval-S clean fixed 500 questions | Done | `results/v044/longmemeval_clean_fixed500` | Same-family OOD; fixed dataset, so bootstrap is more meaningful than split seeds. |
+| MPNet + LongMemEval-S 1000-session stress, 5 seeds | Done | `results/v044/longmemeval_stress1000_seed*` | Seed controls distractor sampling. |
+| Generic synthetic agent scratchpad via v0.43 | Done | `results/v043/generic_retrieval_eval/synthetic_agent_scratchpad` | Synthetic external-format check; not a public benchmark. |
+| BGE / Jina / mxbai stronger rerankers | Pending | none | Requires model artifacts; the current remote has no network access. |
+| BGE-large or E5 embedding-backbone checkpoints | Pending | none | Requires retraining ConvMemory in that embedding space for a fair claim. |
+| Retrained no-temporal ablation checkpoint | Pending | none | Inference-time masking is complete; retrained ablation remains a larger follow-up. |
+| Additional public OOD dataset, e.g. MSC/QMSum/HotpotQA/MuSiQue | Pending | none | Requires dataset download/conversion to v0.43 JSONL. |
+
 ## 1. In-Domain And OOD Reporting
 
 Do not present LoCoMo as an out-of-domain result when using the public LoCoMo-trained checkpoint.
