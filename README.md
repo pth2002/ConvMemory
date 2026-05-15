@@ -12,6 +12,8 @@ It does not replace your vector database. It reranks the candidate memories your
 User query -> vector search top-k -> ConvMemory rerank/expand -> memory context for your agent
 ```
 
+Research preview: ConvMemory can also act as a high-coverage candidate stage before a small cross-encoder pass. The current public package keeps this cascade path in `experiments/` while the stable API remains focused on `rerank` and `expand`.
+
 ## What's New In v0.2
 
 ConvMemory v0.2 adds a public context-expansion API for agent memory systems:
@@ -55,6 +57,13 @@ ConvMemory exposes two public modes:
 The expansion mode is intentionally conservative: it keeps the strongest reranked memories at the front, then fills the remaining context budget from complementary rankings such as raw dense retrieval, candidate-local temporal windows, and optional extra ConvMemory checkpoints.
 
 ## Results
+
+Evaluation scope:
+
+- These are retrieval-stage evaluations, not end-to-end answer generation benchmarks.
+- Latency numbers measure online reranking after memory embeddings and memory-side indexes are available.
+- Cross-encoder comparisons use `cross-encoder/ms-marco-MiniLM-L-6-v2` unless otherwise noted.
+- Tables with different candidate pools, devices, or split averaging are reported separately.
 
 LoCoMo retrieval-stage evaluation, full test split, MPNet embeddings, top500 candidate pool.
 
@@ -129,6 +138,36 @@ Latency benchmark on the first 100 LoCoMo test questions, CPU, cached MPNet embe
 | Cross-encoder top500 | 0.739 | 0.800 | 0.623 | 4171.7 | 1.0x |
 
 This benchmark intentionally separates reranking cost from embedding cost. In a production memory system, memory embeddings are usually precomputed and query embeddings are shared with the vector search step.
+
+## Cascade Fusion Preview
+
+The strongest current research-preview path is a two-stage cascade:
+
+```text
+vector top500 -> ConvMemory top100 -> small cross-encoder pass -> score fusion
+```
+
+This keeps ConvMemory as the high-recall temporal memory reranker and uses the cross-encoder only as a precision booster over a much smaller candidate pool.
+
+LoCoMo test splits, seeds 7/11/23, MPNet embeddings, `ms-marco-MiniLM-L-6-v2` cross-encoder:
+
+| Method | Recall@10 | Hit@10 | MRR@10 | CE pairs/query |
+|---|---:|---:|---:|---:|
+| Cross-encoder raw top500 | 0.7371 | 0.7842 | 0.5978 | 483.8 |
+| ConvMemory balanced | 0.7798 | 0.8361 | 0.5698 | 0.0 |
+| ConvMemory + CE fusion top100 | 0.7908 | 0.8425 | 0.6124 | 100.0 |
+
+This result should not be read as "ConvMemory replaces cross-encoders." It shows a more practical pattern: ConvMemory can build a smaller, higher-coverage candidate pool, and a small cross-encoder pass can then focus on precision.
+
+Latency benchmark on an RTX 4090, 600 LoCoMo test queries, 10 warmup queries per seed. Timing measures online reranking after embeddings and memory-side indexes are available.
+
+| Method | Recall@10 | Hit@10 | MRR@10 | Mean ms/query | P95 ms/query | Speedup vs CE top500 |
+|---|---:|---:|---:|---:|---:|---:|
+| ConvMemory balanced | 0.7408 | 0.8083 | 0.5214 | 10.2 | 13.3 | 10.26x |
+| Cross-encoder raw top500 | 0.7290 | 0.7750 | 0.5813 | 104.5 | 125.4 | 1.00x |
+| ConvMemory + CE fusion top100 | 0.7487 | 0.8033 | 0.5887 | 38.2 | 43.9 | 2.74x |
+
+The cascade numbers should be read as a research-preview result, not a new default API mode. They show that ConvMemory can reduce the number of cross-encoder pairs while preserving or improving retrieval quality in this retrieval-stage setting.
 
 ## Install
 
@@ -321,16 +360,45 @@ Run the cost benchmark:
 
 ```bash
 python experiments/benchmark_cost.py \
-  --device cpu \
+  --device cuda \
   --checkpoint checkpoints/convmemory-locomo-mpnet \
   --encoder-model sentence-transformers/all-mpnet-base-v2 \
   --embedding-cache results/cache/mpnet_embeddings.sqlite \
   --embedding-cache-key sentence-transformers/all-mpnet-base-v2 \
   --candidate-top-n 500 \
-  --cross-top-n 500 \
-  --cascade-ce-top-n 50 \
-  --max-test 100 \
+  --cascade-top-n 50 \
+  --limit 100 \
   --out results/benchmark_cost_mpnet_100_top500
+```
+
+Run the cascade-fusion research preview:
+
+```bash
+python experiments/v035_ce_fusion.py \
+  --device cuda \
+  --checkpoint checkpoints/convmemory-locomo-mpnet \
+  --encoder-model sentence-transformers/all-mpnet-base-v2 \
+  --embedding-cache results/cache/mpnet_embeddings.sqlite \
+  --embedding-cache-key sentence-transformers/all-mpnet-base-v2 \
+  --cross-encoder-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --seeds 7 11 23 \
+  --out results/v035/ce_fusion
+```
+
+Run the latency benchmark:
+
+```bash
+python experiments/v036_latency_benchmark.py \
+  --device cuda \
+  --checkpoint checkpoints/convmemory-locomo-mpnet \
+  --encoder-model sentence-transformers/all-mpnet-base-v2 \
+  --embedding-cache results/cache/mpnet_embeddings.sqlite \
+  --embedding-cache-key sentence-transformers/all-mpnet-base-v2 \
+  --cross-encoder-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
+  --seeds 7 11 23 \
+  --limit 200 \
+  --warmup 10 \
+  --out results/v036/latency_benchmark
 ```
 
 Run the LongMemEval zero-shot retrieval check:
@@ -366,7 +434,7 @@ ConvMemory is an early open-source research library. The current package release
 - reproducible LoCoMo evaluation scripts;
 - honest quality and latency reporting.
 
-The model is useful today as a lightweight memory reranker, but it is still evolving. The next priorities are broader agent-memory benchmarks, cleaner checkpoint distribution, and further optimization of very large memory pools.
+The model is useful today as a lightweight memory reranker, but it is still evolving. The next priorities are broader agent-memory benchmarks, cleaner checkpoint distribution, further optimization of very large memory pools, and turning the cascade-fusion research path into a clean optional API.
 
 ## License
 

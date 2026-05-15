@@ -9,6 +9,7 @@ Runtime code lives in the installable `convmemory/` package:
 - `convmemory/reranker.py`: embedding-level reranking and candidate-local windowing.
 - `convmemory/encoder.py`: temporal Conv/Mixer window encoder.
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
+- `convmemory/routing.py`: compressed-note candidate routing utilities.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
 The `experiments/support/` helpers are used by the reproduction scripts. They
@@ -93,3 +94,31 @@ from complementary rankings. The default `balanced` policy uses the main
 ConvMemory ranking, raw dense retrieval, and candidate-local temporal scoring.
 Advanced users can pass additional ConvMemory checkpoints as expert rankers, but
 the default interface keeps these details optional.
+
+## 7. Compression-Aware Routing
+
+`CompressionRouter` routes from lightweight compressed notes back to raw memory
+candidates. It is useful when a memory store is large enough that reranking every
+raw turn is wasteful.
+
+The router is intentionally separate from the neural reranker:
+
+```text
+query embedding -> compressed-note search -> raw memory candidate ids -> ConvMemory rerank
+```
+
+This keeps it usable in systems that already maintain summaries, session notes,
+or block-level memory indexes.
+
+## 8. Cascade Fusion Research Path
+
+The public package does not yet expose a stable cascade API. Current experiments
+show a promising optional path:
+
+```text
+ConvMemory top100 -> small cross-encoder pass -> normalized score fusion
+```
+
+This is implemented in `experiments/v035_ce_fusion.py` and benchmarked in
+`experiments/v036_latency_benchmark.py`. Treat it as a research-preview path
+rather than the default library interface.
