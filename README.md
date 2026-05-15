@@ -114,6 +114,9 @@ The same checkpoint is used for v0.1, v0.2, and v0.3. The v0.3 release adds
 routing utilities and cascade-fusion experiments; it does not require a new
 ConvMemory weight file.
 
+See [docs/MODEL_CARD.md](docs/MODEL_CARD.md) for checkpoint details and known
+limitations.
+
 ## Core API
 
 ### Rerank
@@ -389,6 +392,10 @@ model is a universal cross-encoder replacement.
 
 ## Reproducibility
 
+For the full evaluation protocol, including simple baselines, feature ablations,
+multi-seed reporting, order robustness, and calibration checks, see
+[docs/EVALUATION_PROTOCOL.md](docs/EVALUATION_PROTOCOL.md).
+
 Main LoCoMo evaluation:
 
 ```bash
@@ -456,6 +463,47 @@ For the large-pool optimized path, add:
   --window-mode candidate_local \
   --precache-lexical
 ```
+
+Baselines, feature ablations, and paired bootstrap statistics:
+
+```bash
+python experiments/v040_baselines_ablation_stats.py \
+  --device cuda \
+  --seeds 7 11 23 31 47 \
+  --bootstrap-samples 10000 \
+  --out results/v040/baselines_ablation_stats
+```
+
+Order robustness:
+
+```bash
+python experiments/v041_order_robustness.py \
+  --device cuda \
+  --seeds 7 11 23 31 47 \
+  --out results/v041/order_robustness
+```
+
+Error analysis and calibration:
+
+```bash
+python experiments/v042_error_calibration.py \
+  --device cuda \
+  --seeds 7 11 23 31 47 \
+  --out results/v042/error_calibration
+```
+
+Generic converted-dataset evaluation:
+
+```bash
+python experiments/v043_generic_retrieval_eval.py \
+  --dataset-name my_dataset \
+  --jsonl data/my_dataset_memory_eval.jsonl \
+  --device cuda \
+  --out results/v043/generic_retrieval_eval
+```
+
+Training and checkpoint export are documented in
+[docs/TRAINING.md](docs/TRAINING.md).
 
 ## Project Status
 

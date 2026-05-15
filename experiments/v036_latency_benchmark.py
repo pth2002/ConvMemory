@@ -147,6 +147,8 @@ def summarize(rows):
                 "mean_ms": float(np.mean(latencies)),
                 "p50_ms": float(np.percentile(latencies, 50)),
                 "p95_ms": float(np.percentile(latencies, 95)),
+                "p99_ms": float(np.percentile(latencies, 99)),
+                "queries_per_second": float(1000.0 / max(1e-9, float(np.mean(latencies)))),
             }
         )
     base = next((row for row in out if row["method"] == "cross_encoder_raw_top500"), None)
@@ -159,7 +161,7 @@ def summarize(rows):
     return sorted(out, key=lambda row: row["mean_ms"])
 
 
-def write_report(path, summary, limit, warmup):
+def write_report(path, summary, limit, warmup, args):
     focus = [
         "raw_vector",
         "convmemory_balanced_halo0",
@@ -175,8 +177,14 @@ def write_report(path, summary, limit, warmup):
         "",
         f"Measured online reranking latency after embedding/note indexes are available. Warmup queries: {warmup}. Measured query cap per seed: {limit or 'all'}.",
         "",
-        "| Method | Recall@10 | Hit@10 | MRR@10 | Mean ms | P50 ms | P95 ms | CE pairs | Speedup vs CE top500 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Cross-encoder timings use `sentence-transformers.CrossEncoder.predict`, so query-candidate tokenization is included in the measured call. Query embedding and memory-side indexing are not included. Batch sizes are reported here to make serving assumptions explicit.",
+        "",
+        f"- Encoder batch size: {args.encoder_batch_size}",
+        f"- Cross-encoder batch size: {args.cross_batch_size}",
+        f"- Device: {args.device}",
+        "",
+        "| Method | Recall@10 | Hit@10 | MRR@10 | Mean ms | P50 ms | P95 ms | P99 ms | QPS | CE pairs | Speedup vs CE top500 |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for method in focus:
         row = by_method.get(method)
@@ -185,7 +193,8 @@ def write_report(path, summary, limit, warmup):
         lines.append(
             f"| `{method}` | {row['recall_at_10']:.4f} | {row['hit_at_10']:.4f} | "
             f"{row['mrr']:.4f} | {row['mean_ms']:.1f} | {row['p50_ms']:.1f} | "
-            f"{row['p95_ms']:.1f} | {row['avg_ce_pairs']:.1f} | "
+            f"{row['p95_ms']:.1f} | {row['p99_ms']:.1f} | {row['queries_per_second']:.1f} | "
+            f"{row['avg_ce_pairs']:.1f} | "
             f"{row.get('speedup_vs_ce_raw_top500', 0.0):.2f}x |"
         )
     Path(path).write_text("\n".join(lines), encoding="utf-8")
@@ -401,7 +410,7 @@ def main():
     out_dir = ROOT / args.out
     write_csv(out_dir / "latency_detailed.csv", rows)
     write_csv(out_dir / "latency_summary.csv", summary)
-    write_report(out_dir / "REPORT.md", summary, args.limit, args.warmup)
+    write_report(out_dir / "REPORT.md", summary, args.limit, args.warmup, args)
 
 
 if __name__ == "__main__":
