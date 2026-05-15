@@ -216,6 +216,87 @@ def feature_masked_rank(convmemory, item, mask_name, candidate_top_n=500, window
     )
 
 
+def feature_masked_rankings(convmemory, item, mask_names, candidate_top_n=500, window_mode="candidate_local"):
+    """Compute all feature-mask ablations from one shared feature tensor."""
+
+    raw_scores = cosine_scores(item["query_embedding"], item["memory_embeddings"])
+    candidate_indices = np.argsort(-raw_scores)[: min(candidate_top_n, len(raw_scores))]
+    scoring_item = item
+    if window_mode == "candidate_local":
+        windows = candidate_local_windows(
+            len(item["memory_ids"]),
+            candidate_indices,
+            convmemory.config.window_size,
+        )
+        scoring_item = {
+            **item,
+            "windows": windows,
+            "window_tensor": window_tensor(item["memory_embeddings"], windows),
+        }
+    elif window_mode == "full":
+        scoring_item = {
+            **item,
+            "window_tensor": window_tensor(item["memory_embeddings"], item["windows"]),
+        }
+    else:
+        raise ValueError("window_mode must be 'candidate_local' or 'full'")
+
+    with torch.no_grad():
+        window_logits = window_scores(convmemory.reranker.conv_model, scoring_item, convmemory.device)
+        memory_to_windows = build_memory_to_windows(scoring_item["windows"])
+        features, _, _ = candidate_features(
+            convmemory.reranker.conv_model,
+            scoring_item,
+            candidate_indices,
+            convmemory.device,
+            raw_scores_all=raw_scores,
+            window_logits=window_logits,
+            memory_to_windows=memory_to_windows,
+            dca_router_block_size=convmemory.config.dca_router_block_size,
+            lexical_features=convmemory.config.lexical_features,
+        )
+
+        dim = item["memory_embeddings"].shape[1]
+        scalar_start = dim * 4
+        raw_col = scalar_start
+        window_col = scalar_start + 1
+        router_col = scalar_start + 4
+        lexical_start = scalar_start + 5
+
+        rankings = {}
+        for mask_name in mask_names:
+            masked = features.clone()
+            if mask_name == "full":
+                pass
+            elif mask_name == "no_temporal_window":
+                masked[:, window_col] = 0.0
+            elif mask_name == "no_lexical":
+                masked[:, lexical_start : lexical_start + 4] = 0.0
+            elif mask_name == "no_router":
+                masked[:, router_col] = 0.0
+            elif mask_name == "no_raw_feature":
+                masked[:, raw_col] = 0.0
+            elif mask_name == "temporal_only":
+                kept = masked[:, window_col].clone()
+                masked.zero_()
+                masked[:, window_col] = kept
+            else:
+                raise ValueError(f"Unknown mask: {mask_name}")
+
+            scores = convmemory.reranker.scorer(masked).detach().cpu().numpy()
+            raw_weight = convmemory.config.raw_weight
+            if mask_name in {"no_raw_feature", "temporal_only"}:
+                raw_weight = 0.0
+            rankings[mask_name] = rerank_candidates(
+                raw_scores,
+                candidate_indices,
+                scores,
+                item["memory_ids"],
+                raw_weight=raw_weight,
+            )
+    return rankings
+
+
 def baseline_rankings(item, window_size, recency_lambdas):
     memory_ids = item["memory_ids"]
     texts = [memory["text"] for memory in item["memories"]]
@@ -440,14 +521,14 @@ def main():
 
             embedding_dim = int(item["memory_embeddings"].shape[1])
             if embedding_dim == checkpoint_dim:
-                for mask in masks:
-                    ranked = feature_masked_rank(
-                        convmemory,
-                        item,
-                        mask,
-                        candidate_top_n=args.candidate_top_n,
-                        window_mode="candidate_local",
-                    )
+                masked_rankings = feature_masked_rankings(
+                    convmemory,
+                    item,
+                    masks,
+                    candidate_top_n=args.candidate_top_n,
+                    window_mode="candidate_local",
+                )
+                for mask, ranked in masked_rankings.items():
                     add_metric_row(rows, seed, args.split, f"convmemory_mask::{mask}", item, ranked)
 
                 full_window_ranked = feature_masked_rank(
