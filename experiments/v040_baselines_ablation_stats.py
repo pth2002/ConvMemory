@@ -426,6 +426,8 @@ def main():
         "no_raw_feature",
         "temporal_only",
     ]
+    checkpoint_dim = int(convmemory.model_config.get("embedding_dim", -1))
+    warned_dim_mismatch = False
     for seed in args.seeds:
         split_examples = choose_split(examples, args.split, args.dev_ratio, seed)
         if args.limit:
@@ -436,24 +438,34 @@ def main():
             for method, ranked in baseline_ranked.items():
                 add_metric_row(rows, seed, args.split, method, item, ranked)
 
-            for mask in masks:
-                ranked = feature_masked_rank(
+            embedding_dim = int(item["memory_embeddings"].shape[1])
+            if embedding_dim == checkpoint_dim:
+                for mask in masks:
+                    ranked = feature_masked_rank(
+                        convmemory,
+                        item,
+                        mask,
+                        candidate_top_n=args.candidate_top_n,
+                        window_mode="candidate_local",
+                    )
+                    add_metric_row(rows, seed, args.split, f"convmemory_mask::{mask}", item, ranked)
+
+                full_window_ranked = feature_masked_rank(
                     convmemory,
                     item,
-                    mask,
+                    "full",
                     candidate_top_n=args.candidate_top_n,
-                    window_mode="candidate_local",
+                    window_mode="full",
                 )
-                add_metric_row(rows, seed, args.split, f"convmemory_mask::{mask}", item, ranked)
-
-            full_window_ranked = feature_masked_rank(
-                convmemory,
-                item,
-                "full",
-                candidate_top_n=args.candidate_top_n,
-                window_mode="full",
-            )
-            add_metric_row(rows, seed, args.split, "convmemory_mask::full_global_windows", item, full_window_ranked)
+                add_metric_row(rows, seed, args.split, "convmemory_mask::full_global_windows", item, full_window_ranked)
+            elif not warned_dim_mismatch:
+                print(
+                    "Skipping ConvMemory checkpoint evaluation because encoder dimension "
+                    f"{embedding_dim} != checkpoint dimension {checkpoint_dim}. "
+                    "Raw/BM25/lexical/CE baselines will still run.",
+                    flush=True,
+                )
+                warned_dim_mismatch = True
 
             ce_ranked = cross_encoder_rankings(item, args.cross_top_n, cross_encoders, args.cross_batch_size)
             for method, ranked in ce_ranked.items():
