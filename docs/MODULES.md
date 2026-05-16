@@ -9,7 +9,6 @@ Runtime code lives in the installable `convmemory/` package:
 - `convmemory/reranker.py`: embedding-level reranking and candidate-local windowing.
 - `convmemory/encoder.py`: temporal Conv/Mixer window encoder.
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
-- `convmemory/routing.py`: compressed-note candidate routing utilities.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
 The `experiments/support/` helpers are used by the reproduction scripts. They
@@ -36,39 +35,60 @@ The core memory encoder reads a short temporal window of memory embeddings:
 [memory_t-2, memory_t-1, memory_t, memory_t+1, memory_t+2]
 ```
 
-It uses lightweight temporal convolution plus Mixer-style token/channel mixing to model local event-chain structure.
+It uses lightweight temporal convolution plus Mixer-style token/channel mixing
+to model local event-chain structure.
 
-## 2. DCA Router Signal
+Retrained v0.48 ablation shows that this temporal signal is real but secondary:
+removing temporal context with `window_size=1` reduces Recall@10 by 0.0353
+relative to the full model.
 
-The current DCA component is a lightweight block router signal.
-
-It scores coarse memory blocks and adds a block-level temporal/context signal to the CE-lite scorer. In the current mainline, DCA is useful as an auxiliary feature, not as the whole retrieval mechanism.
-
-## 3. Lexical Features
+## 2. Lexical Features
 
 ConvMemory includes small lexical overlap features:
 
-- token overlap
-- token recall against the query
-- bigram overlap
-- bigram recall against the query
+- token overlap;
+- token recall against the query;
+- bigram overlap;
+- bigram recall against the query.
 
-These features help recover lexical anchors that pure embedding similarity can miss.
+Retrained ablation shows these are the largest contributor in the current
+checkpoint. Removing lexical features reduces Recall@10 by 0.0890 relative to
+the full model.
 
-## 4. CE-lite Scorer
+## 3. CE-lite Scorer
 
 The CE-lite scorer fuses:
 
-- query embedding
-- candidate memory embedding
-- query-memory interaction features
-- raw dense score
-- ConvMemory window score
-- rank / temporal position
-- DCA router score
-- lexical features
+- query embedding;
+- candidate memory embedding;
+- query-memory interaction features;
+- raw dense score;
+- ConvMemory window score;
+- rank and temporal-position features;
+- lexical features.
 
-It is not a token-level cross-encoder. It operates over precomputed embeddings plus lightweight side features.
+It is not a token-level cross-encoder. It operates over precomputed embeddings
+plus lightweight side features.
+
+The current module description is:
+
+```text
+Temporal Conv/Mixer + lexical/query interaction CE-lite reranking
+```
+
+## 4. Retired Experimental Router Scalar
+
+Earlier experiments included a router/DCA-style scalar side feature. Hardened
+v0.48 retrained ablation found no measurable benefit:
+
+```text
+full_control Recall@10: 0.7474
+no_router    Recall@10: 0.7491
+delta:       +0.0017
+```
+
+This scalar is therefore treated as an experimental negative result, not a
+feature or selling point.
 
 ## 5. Raw Dense Score Fusion
 
@@ -80,45 +100,37 @@ final_score = raw_weight * raw_score + (1 - raw_weight) * convmemory_score
 
 The current best setting usually keeps `raw_weight` near `0` to `0.025`.
 
-The current module description is:
-
-```text
-Temporal Conv/Mixer + DCA router signal + lexical CE-lite reranking
-```
-
 ## 6. Context Expansion
 
 `ConvMemory.expand_context(...)` and `ConvMemory.retrieve(..., mode="expand")`
 protect the strongest ConvMemory results, then fill the remaining context budget
-from complementary rankings. The default `balanced` policy uses the main
-ConvMemory ranking, raw dense retrieval, and candidate-local temporal scoring.
-Advanced users can pass additional ConvMemory checkpoints as expert rankers, but
-the default interface keeps these details optional.
+from complementary rankings. The default policy uses the main ConvMemory
+ranking, raw dense retrieval, and candidate-local temporal scoring.
 
-## 7. Compression-Aware Routing
+Expansion is useful when the downstream agent can read a wider context and the
+cost of missing a key memory is higher than the cost of including a few extra
+candidates.
 
-`CompressionRouter` routes from lightweight compressed notes back to raw memory
-candidates. It is useful when a memory store is large enough that reranking every
-raw turn is wasteful.
+## 7. Optional Compressed-Note Candidate Selection
 
-The router is intentionally separate from the neural reranker:
+Some applications maintain session summaries or compressed notes. In that case,
+compressed-note search can be used as a candidate-selection layer before
+ConvMemory reranking:
 
 ```text
 query embedding -> compressed-note search -> raw memory candidate ids -> ConvMemory rerank
 ```
 
-This keeps it usable in systems that already maintain summaries, session notes,
-or block-level memory indexes.
+This is separate from the neural reranker and is not part of the core v0.48
+architecture claim.
 
 ## 8. Cascade Fusion Research Path
 
 The public package does not yet expose a stable cascade API. Current experiments
-show a promising optional path:
+support a practical optional path:
 
 ```text
-ConvMemory top100 -> small cross-encoder pass -> normalized score fusion
+ConvMemory candidate stage -> small cross-encoder pass -> normalized score fusion
 ```
 
-This is implemented in `experiments/v035_ce_fusion.py` and benchmarked in
-`experiments/v036_latency_benchmark.py`. Treat it as a research-preview path
-rather than the default library interface.
+Treat this as a research-preview path rather than the default library interface.

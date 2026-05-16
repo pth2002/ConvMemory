@@ -5,6 +5,7 @@ This model card covers the public `convmemory-locomo-mpnet` checkpoint.
 ## Model Summary
 
 - Model type: lightweight temporal memory reranker.
+- Approximate size: 3.6M parameters.
 - Embedding backbone: `sentence-transformers/all-mpnet-base-v2`.
 - Input unit: ordered memory records, usually conversation turns or agent memory entries.
 - Output: reranked memory ids and scores.
@@ -17,10 +18,15 @@ The checkpoint combines:
 
 - temporal Conv/Mixer window encoding over ordered memory embeddings;
 - query-memory interaction features;
-- raw dense retrieval features;
+- raw dense retrieval score features;
 - candidate-local window features;
 - lightweight lexical overlap features;
-- a block-level router feature.
+- a CE-lite scorer over embedding-level and scalar features.
+
+Hardened v0.48 retrained ablations show that lexical features are the largest
+contributor and temporal windowing is a real but smaller contributor. A legacy
+router/DCA scalar was ablated and showed no measurable benefit; it should not be
+treated as an architecture selling point.
 
 Checkpoint configuration:
 
@@ -33,10 +39,8 @@ Checkpoint configuration:
 | Hidden dimension | 256 |
 | Token MLP dimension | 32 |
 | Channel MLP dimension | 512 |
-| Extra scalar features | 5 |
 | Candidate top-n | 500 |
 | Raw score fusion weight | 0.025 |
-| Router block size | 32 |
 | Parameters | 3,648,118 |
 
 Parameter breakdown:
@@ -49,9 +53,11 @@ Parameter breakdown:
 
 ## Training Data
 
-The public checkpoint was trained on LoCoMo-style long-term conversational memory data.
+The public checkpoint was trained on LoCoMo-style long-term conversational
+memory data.
 
-Important caveat: LoCoMo benchmark results are in-domain for this checkpoint. They should not be presented as broad out-of-domain generalization results.
+Important caveat: LoCoMo benchmark results are in-domain for this checkpoint.
+They should not be presented as broad out-of-domain generalization results.
 
 ## Training Objective
 
@@ -72,32 +78,51 @@ See [TRAINING.md](TRAINING.md) for a complete command.
 
 ## Evaluation Scope
 
-Current public results are retrieval-stage evaluations. They measure whether evidence memory ids are retrieved into the top-k list. They do not measure full answer generation.
+Current public results are retrieval-stage evaluations. They measure whether
+evidence memory ids are retrieved into the top-k list. They do not measure full
+answer generation.
 
-Known evaluation gaps:
+Canonical audited summary:
 
-- out-of-domain coverage is still limited to same-family LongMemEval-S plus a
-  synthetic agent-scratchpad sanity check;
-- limited cross-encoder baselines;
-- limited embedding backbone coverage;
-- incomplete trained-ablation matrix;
-- paired significance tests are available for the main LoCoMo and LongMemEval-S
-  comparisons, but not for every exploratory experiment;
-- order robustness has been tested with synthetic perturbations on LoCoMo, but
-  real missing/noisy timestamp behavior still needs broader validation.
+- `remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`
+- The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
+  broken `tabulate` import stub.
 
-The v0.40-v0.43 scripts were added to address these gaps systematically.
+Hardened result summary:
+
+- LoCoMo strong-CE comparison:
+  - ConvMemory is competitive on Recall@10.
+  - It beats BGE-reranker-base/large on Recall@10.
+  - It loses to `mxbai-rerank-large-v1` on Recall@10 and MRR.
+- Retrained ablation:
+  - lexical features are the dominant contributor;
+  - temporal windowing contributes a smaller but real gain;
+  - the router/DCA scalar contributes approximately zero.
+- Strong-backbone retraining:
+  - BGE-large and E5-large retrained checkpoints still gain about +9 to +10
+    Recall@10 points over raw dense retrieval.
+- External OOD:
+  - QMSum is positive;
+  - MSC improves over raw dense but lexical/BM25 baselines dominate the weak labels;
+  - HotpotQA favors dense+lexical scoring;
+  - MuSiQue is negative against raw dense.
+- LongMemEval strong-CE checks:
+  - ConvMemory is much lower latency than BGE-large and mxbai cross-encoders in
+    the tested memory-family settings;
+  - mxbai remains stronger in accuracy.
 
 ## Limitations
 
+- ConvMemory is a memory reranker, not a vector database and not a full QA system.
+- It should not be given an overall cross-encoder superiority claim.
+- It is not a broad document reranker; MuSiQue shows a clear negative result.
 - Memory order matters. If timestamps are missing or severely corrupted, quality may degrade.
-- Scores are not calibrated by default. A post-hoc confidence calibration script
-  is provided in `experiments/v046_calibrate_confidence.py`, but production
-  thresholding should be validated on application data.
-- The public checkpoint is optimized for the MPNet embedding space; other embedding backbones require retraining or at least careful validation.
-- The model is a reranker, not a vector database and not a full QA system.
+- Scores are not calibrated by default. Production thresholding should be validated on application data.
+- The public checkpoint is optimized for the MPNet embedding space; other embedding backbones require retraining or careful validation.
 - Cascade fusion with a cross-encoder is currently research-preview code, not a stable public API.
 
 ## Responsible Use
 
-ConvMemory retrieves memory text that may contain sensitive user information. Applications should apply their own privacy, retention, and access-control policies before storing or surfacing memories.
+ConvMemory retrieves memory text that may contain sensitive user information.
+Applications should apply their own privacy, retention, and access-control
+policies before storing or surfacing memories.

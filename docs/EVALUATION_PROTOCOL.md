@@ -1,45 +1,56 @@
 # Evaluation Protocol
 
-This protocol turns the main review concerns into concrete experiments.
+This protocol records which evaluation items have been completed and how claims
+should be reported.
+
+Canonical audited summary:
+
+- `remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`
+- The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
+  broken `tabulate` import stub.
 
 ## Completion Status
 
-This table distinguishes experiments that have been run from protocol items
-that are still planned. A command appearing later in this document is not a
-claim that the result has already been completed.
+A command appearing later in this document is a reproducibility recipe, not a
+claim that every optional experiment has been completed.
 
 | Item | Status | Evidence path | Notes |
 |---|---|---|---|
 | MPNet + LoCoMo simple baselines / feature masks, 5 seeds | Done | `results/v040/baselines_ablation_stats_mpnet` | In-domain checkpoint evaluation. |
+| MPNet + MiniLM-L6 LoCoMo CE top500, 5 seeds | Done | `results/v040/minilm_ce_top500_5seed_full` | Includes paired bootstrap for ConvMemory vs MiniLM CE. |
+| LoCoMo stronger rerankers, 5 seeds | Done | `remote_results_archive/.../results/v047/strong_rerankers` | Includes BGE-base, BGE-large, Jina trust, and mxbai. |
+| Jina reranker trust-mode audit | Done | `remote_results_archive/.../results/v047/strong_rerankers/jina_reranker_v2_base_multilingual_trust` | Non-trust Jina failed; trust-enabled runs completed. |
 | MPNet + LoCoMo order robustness, 5 seeds | Done | `results/v041/order_robustness_mpnet` | Synthetic order perturbations. |
 | MPNet + LoCoMo error analysis / calibration bins, 5 seeds | Done | `results/v042/error_calibration_mpnet` | Diagnostic confidence features. |
-| Post-hoc confidence calibration | Done | `results/v046/confidence_calibration_mpnet` | Platt/logistic and isotonic calibration over v0.42 cases. |
-| MPNet + MiniLM-L6 LoCoMo CE top500, 5 seeds | Done | `results/v040/minilm_ce_top500_5seed_full` | Includes paired bootstrap for ConvMemory vs MiniLM CE. |
-| MPNet + LongMemEval-S clean fixed 500 questions | Done | `results/v044/longmemeval_clean_fixed500` | Same-family OOD; fixed dataset, so bootstrap is more meaningful than split seeds. |
-| MPNet + LongMemEval-S 1000-session stress, 5 seeds | Done | `results/v044/longmemeval_stress1000_seed*` | Seed controls distractor sampling. |
-| Generic synthetic agent scratchpad via v0.43 | Done | `results/v043/generic_retrieval_eval/synthetic_agent_scratchpad` | Synthetic external-format check; not a public benchmark. |
-| BGE / Jina / mxbai stronger rerankers | Pending | none | Requires model artifacts; the current remote has no network access. |
-| BGE-large or E5 embedding-backbone checkpoints | Pending | none | Requires retraining ConvMemory in that embedding space for a fair claim. |
-| Retrained no-temporal ablation checkpoint | Pending | none | Inference-time masking is complete; retrained ablation remains a larger follow-up. |
-| Additional public OOD dataset, e.g. MSC/QMSum/HotpotQA/MuSiQue | Pending | none | Requires dataset download/conversion to v0.43 JSONL. |
+| Post-hoc confidence calibration | Done | `results/v046/confidence_calibration_mpnet` | Calibration is measured, not production-certified. |
+| MPNet + LongMemEval-S clean fixed 500 questions | Done | `remote_results_archive/.../results/v047/longmemeval_strong_ce` | Includes BGE-large and mxbai CE checks. |
+| MPNet + LongMemEval-S 1000-session stress | Partially done | `remote_results_archive/.../results/v047/longmemeval_strong_ce` | Strong-CE stress checks are seed23 only. Earlier MiniLM stress was 5-seed. |
+| External OOD: QMSum, MSC, HotpotQA, MuSiQue | Done | `remote_results_archive/.../results/v047/external_ood` | Single run each; report as mixed evidence. |
+| Retrained feature ablation | Done | `remote_results_archive/.../results/v048/retrained_ablation_3seed` | 3 seeds; includes no-temporal, no-lexical, no-router. |
+| BGE-large and E5-large backbone retraining | Done | `remote_results_archive/.../results/v048/backbone_3seed_summary` | 3 seeds each; model retrained in each embedding space. |
+| End-to-end answer generation evaluation | Pending | none | Retrieval-stage results do not prove QA improvements. |
+| Production calibration / abstention thresholding | Pending | none | Needs application-specific validation. |
 
-## 1. In-Domain And OOD Reporting
+## 1. Reporting Scope
 
-Do not present LoCoMo as an out-of-domain result when using the public LoCoMo-trained checkpoint.
+Do not present LoCoMo as an out-of-domain result when using the public
+LoCoMo-trained checkpoint.
 
 Recommended table layout:
 
 | Dataset | Split type | Training overlap | Purpose |
 |---|---|---|---|
 | LoCoMo | conversation-level test split | in-domain | checkpoint sanity and main memory-retrieval check |
-| LongMemEval-S | same-family OOD | no LongMemEval training | long-memory transfer check |
-| Converted JSONL datasets | external OOD | dataset-specific | broader robustness check |
+| LongMemEval-S | same-family OOD | no LongMemEval training | long-memory transfer and cost comparison |
+| QMSum / MSC | conversation-style external checks | no task-specific training | memory-like OOD signal |
+| HotpotQA / MuSiQue | non-temporal document-style checks | no task-specific training | scope-boundary evidence |
 
-Use `experiments/v043_generic_retrieval_eval.py` for converted datasets.
+External OOD results should be described as mixed. The MuSiQue negative result
+must be shown when discussing generalization.
 
 ## 2. Multi-Seed Statistics
 
-Run:
+Use multi-seed mean/std for headline in-domain claims:
 
 ```bash
 python experiments/v040_baselines_ablation_stats.py \
@@ -57,7 +68,8 @@ This writes:
 - `paired_bootstrap.csv`
 - `REPORT.md`
 
-Headline claims should use mean/std and paired bootstrap intervals, not single numbers.
+Headline claims should use mean/std and paired bootstrap intervals when
+available, not single numbers.
 
 ## 3. Simple Baselines
 
@@ -70,59 +82,60 @@ v0.40 includes:
 - dense + lexical RRF;
 - dense + lexical + temporal-window RRF.
 
-These are the first baselines to check before claiming that neural temporal reranking is necessary.
+These are the first baselines to check before claiming that neural temporal
+reranking is necessary.
 
-## 4. Feature Ablations
+## 4. Retrained Ablations
 
-v0.40 includes inference-time feature masking:
+The v0.48 retrained ablation matrix is now the preferred ablation evidence.
+Inference-time feature masks from v0.40 remain diagnostic, but should not be
+used as the primary architecture claim.
 
-- full ConvMemory;
-- no temporal-window score;
-- no lexical features;
-- no router feature;
-- no raw dense feature;
-- temporal-window score only;
-- full global windows vs candidate-local windows.
+Completed v0.48 variants:
 
-These are not a replacement for retrained ablations, but they identify which signals the current checkpoint depends on.
+- `full_control`
+- `no_router`
+- `no_temporal_w1`
+- `no_lexical`
+- `no_lexical_no_router`
+
+Interpretation:
+
+- lexical features are the largest contributor;
+- temporal windowing is real but secondary;
+- the router/DCA scalar contributes approximately zero and should not be
+  presented as a feature.
 
 ## 5. Stronger Cross-Encoder Baselines
 
-The default public benchmark uses `cross-encoder/ms-marco-MiniLM-L-6-v2`. This is not enough for a strong research claim.
+The original MiniLM comparison is useful but insufficient for a modern reranker
+claim. v0.47 completed stronger LoCoMo baselines:
 
-Run v0.40 with additional rerankers:
+- `BAAI/bge-reranker-base`
+- `jinaai/jina-reranker-v2-base-multilingual` with `trust_remote_code=True`
+- `BAAI/bge-reranker-large`
+- `mixedbread-ai/mxbai-rerank-large-v1`
 
-```bash
-python experiments/v040_baselines_ablation_stats.py \
-  --device cuda \
-  --seeds 7 11 23 31 47 \
-  --cross-encoder-models cross-encoder/ms-marco-MiniLM-L-6-v2,BAAI/bge-reranker-base,BAAI/bge-reranker-large
-```
+Claim boundary:
 
-Large rerankers may require smaller `--cross-batch-size`.
+- ConvMemory beats BGE-reranker-base/large on LoCoMo Recall@10.
+- ConvMemory loses to mxbai on LoCoMo Recall@10 and MRR.
+- Do not write an overall cross-encoder superiority claim for ConvMemory.
 
 ## 6. Embedding Backbones
 
-Run v0.40 separately for each embedding model:
+Backbone robustness should use retrained checkpoints, not simply plugging a new
+embedding model into an MPNet-trained checkpoint.
 
-```bash
-python experiments/v040_baselines_ablation_stats.py \
-  --device cuda \
-  --encoder-model sentence-transformers/all-mpnet-base-v2 \
-  --embedding-cache results/cache/mpnet_embeddings.sqlite
+Completed v0.48 retraining:
 
-python experiments/v040_baselines_ablation_stats.py \
-  --device cuda \
-  --encoder-model BAAI/bge-large-en-v1.5 \
-  --embedding-cache results/cache/bge_large_embeddings.sqlite
+- BGE-large, 3 seeds
+- E5-large, 3 seeds
 
-python experiments/v040_baselines_ablation_stats.py \
-  --device cuda \
-  --encoder-model intfloat/e5-large-v2 \
-  --embedding-cache results/cache/e5_large_embeddings.sqlite
-```
+Reading:
 
-The MPNet checkpoint may not be optimal in another embedding space. Treat non-MPNet runs as robustness checks unless the model is retrained.
+- gains remain about +9 to +10 Recall@10 points over raw dense retrieval;
+- gains shrink as the base retriever becomes stronger, which is expected.
 
 ## 7. Order Robustness
 
@@ -135,7 +148,9 @@ python experiments/v041_order_robustness.py \
   --out results/v041/order_robustness
 ```
 
-This evaluates original order, partial shuffles, full shuffle, block shuffle, and reverse order.
+This evaluates original order, partial shuffles, full shuffle, block shuffle,
+and reverse order. Treat this as synthetic perturbation evidence, not a full
+production timestamp-noise study.
 
 ## 8. Error Analysis And Calibration
 
@@ -155,9 +170,10 @@ This writes:
 - per-question deltas;
 - calibration bins for top-score and margin features.
 
-## 9. Latency Fairness
+Calibration is measured but not fixed. Do not present ConvMemory scores as
+cross-query calibrated confidence without application-specific calibration.
 
-Use `experiments/v036_latency_benchmark.py`.
+## 9. Latency Fairness
 
 Report:
 
@@ -165,20 +181,25 @@ Report:
 - encoder batch size;
 - cross-encoder batch size;
 - whether tokenization is included;
-- P50 / P95 / P99;
-- queries per second;
+- P50 / P95 / P99 when available;
+- queries per second or ms/query;
 - whether embeddings and memory-side indexes are cached.
 
-Do not compare cached ConvMemory against an unoptimized production cross-encoder serving stack without clearly labeling the limitation.
+Do not compare cached ConvMemory against an unoptimized production
+cross-encoder serving stack without clearly labeling the limitation.
 
 ## 10. Claim Policy
 
 Safe claim:
 
-> ConvMemory is an early lightweight temporal memory reranker with preliminary evidence that it improves recall-oriented memory selection over raw dense retrieval and can serve as a candidate stage before a small cross-encoder pass.
+> ConvMemory is a lightweight temporal memory reranker that improves
+> recall-oriented memory selection over raw dense retrieval on session-structured
+> memory tasks, with much lower latency than full top500 modern cross-encoder
+> reranking in the tested memory-family settings.
 
-Avoid until the protocol above is fully run:
+Avoid:
 
-> ConvMemory is state of the art.
-> ConvMemory generally outperforms cross-encoders.
-> ConvMemory is proven robust across memory datasets.
+> ConvMemory has broad leaderboard leadership.
+> ConvMemory has broad cross-encoder superiority.
+> ConvMemory is proven robust across unrelated retrieval datasets.
+> The retired router scalar is a core contributor.

@@ -7,16 +7,16 @@
 ConvMemory is a lightweight temporal memory reranker for long-term
 conversational and agent memory.
 
-It is designed to run after vector search and before prompt construction:
+It runs after vector search and before prompt construction:
 
 ```text
 user query -> vector search top-k -> ConvMemory -> memory context
 ```
 
-The model scores ordered memory candidates with local temporal windows,
-query-memory interaction features, lexical anchors, and dense retrieval scores.
-It is intended for systems where memories form an event stream: conversations,
-user histories, agent traces, task logs, or session-level notes.
+ConvMemory is not a vector database, a full QA system, or a general document
+reranker. Its intended use is recall-oriented memory selection for ordered
+memory streams: conversations, user histories, agent traces, task logs, and
+session-level notes.
 
 Current package version: `0.3.0`
 
@@ -26,20 +26,20 @@ Use ConvMemory when:
 
 - your memory store has chronological or session structure;
 - raw vector search misses important neighboring evidence;
-- you need a cheaper recall-oriented stage before a full cross-encoder pass;
+- you need a cheaper high-recall stage before an optional cross-encoder pass;
 - the downstream agent can benefit from a compact, reranked memory context.
 
 Do not use ConvMemory as:
 
 - a vector database;
 - a general web/document reranker without temporal structure;
-- an end-to-end QA model;
-- a universal replacement for cross-encoders.
+- an end-to-end answer-generation model;
+- a universal replacement for modern cross-encoders.
 
-For maximum top-rank precision, the strongest current path is a cascade:
+The strongest current deployment pattern is a cascade:
 
 ```text
-vector top500 -> ConvMemory top100 -> small cross-encoder -> fused ranking
+vector top500 -> ConvMemory candidate stage -> optional small cross-encoder -> memory context
 ```
 
 ## Installation
@@ -178,281 +178,140 @@ ranked = memory_reranker.rerank_embeddings(
 The checkpoint and embeddings must use the same embedding model family and
 embedding dimension.
 
-## Compression-Aware Routing
-
-ConvMemory also includes optional routing utilities for large memory stores
-that maintain session notes, summaries, or fixed-size memory blocks:
-
-```python
-from convmemory import (
-    CompressedNoteConfig,
-    CompressionRouteConfig,
-    CompressionRouter,
-    build_compressed_notes,
-)
-
-notes = build_compressed_notes(
-    memories=all_user_memories,
-    memory_embeddings=memory_embeddings,
-    config=CompressedNoteConfig(mode="session", representatives=3),
-)
-
-note_embeddings = embedding_model.encode(
-    [note["text"] for note in notes],
-    normalize_embeddings=True,
-)
-
-router = CompressionRouter(
-    CompressionRouteConfig(
-        note_depth=240,
-        max_sources_per_note=5,
-        max_candidates=450,
-        raw_anchor=80,
-    )
-)
-
-route = router.route(
-    query_embedding=query_embedding,
-    memory_embeddings=memory_embeddings,
-    memory_ids=memory_ids,
-    compressed_embeddings=note_embeddings,
-    compressed_memories=notes,
-)
-
-ranked = memory_reranker.rerank_embeddings(
-    query_embedding=query_embedding,
-    memory_embeddings=memory_embeddings,
-    memory_ids=memory_ids,
-    memory_texts=memory_texts,
-    candidate_indices=route.candidate_indices,
-    query=query,
-    top_k=20,
-)
-```
-
-The router is separate from the neural reranker. It returns candidate ids or
-indices and can be used with existing memory stores.
-
 ## Results
 
 These are retrieval-stage evaluations. They measure whether annotated evidence
 memories are retrieved into the top-k list; they do not measure final answer
 generation.
 
+Authoritative result source:
+
+- `remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`
+- The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
+  broken `tabulate` import stub.
+
 Important scope notes:
 
-- The public checkpoint is trained on LoCoMo-style data; LoCoMo is an in-domain
-  evaluation for this checkpoint.
-- The cross-encoder baseline reported here is
-  `cross-encoder/ms-marco-MiniLM-L-6-v2`, a small reranker baseline.
-- Latency numbers are measured after memory embeddings and memory-side indexes
-  are available. Cross-encoder timing includes `CrossEncoder.predict`
-  tokenization.
-- Results should be read as evidence for a lightweight memory module, not as a
-  state-of-the-art reranking claim.
+- The public checkpoint is trained on LoCoMo-style data; LoCoMo is in-domain
+  for this checkpoint.
+- Stronger rerankers matter. ConvMemory beats BGE-reranker-base/large on
+  LoCoMo Recall@10, but it loses to `mxbai-rerank-large-v1` on both Recall@10
+  and MRR.
+- External OOD results are mixed. The MuSiQue negative result is reported below
+  because ConvMemory is not intended as a broad multi-hop document reranker.
+- Latency numbers assume memory embeddings and memory-side indexes are already
+  available. Cross-encoder timing includes pairwise scoring through the tested
+  `CrossEncoder` path.
 
-### LoCoMo Memory Retrieval
+### LongMemEval Cost Advantage
 
-Five split seeds, MPNet embeddings, top500 candidate pool.
+This is the strongest practical story for ConvMemory: on memory-family tasks it
+offers a much cheaper reranking stage while remaining recall-competitive.
 
-| Method | Recall@10 | Hit@10 | MRR |
+| Setting | Method | Recall@10 | MRR | ms/query |
+|---|---|---:|---:|---:|
+| Clean500, BGE-large CE | Raw MPNet | 0.9049 | 0.7829 | 0.01 |
+| Clean500, BGE-large CE | BGE-large CE top500 | 0.8807 | 0.8574 | 555.69 |
+| Clean500, BGE-large CE | ConvMemory top500 | 0.9593 | 0.8973 | 44.00 |
+| Clean500, mxbai CE | Raw MPNet | 0.9049 | 0.7829 | 0.01 |
+| Clean500, mxbai CE | mxbai CE top500 | 0.9835 | 0.9317 | 1129.14 |
+| Clean500, mxbai CE | ConvMemory top500 | 0.9593 | 0.8973 | 40.80 |
+| Stress1000 seed23, BGE-large CE | Raw MPNet | 0.5452 | 0.4561 | 0.13 |
+| Stress1000 seed23, BGE-large CE | BGE-large CE top500 | 0.6913 | 0.6651 | 5231.77 |
+| Stress1000 seed23, BGE-large CE | ConvMemory candidate-local | 0.7386 | 0.6125 | 110.71 |
+| Stress1000 seed23, mxbai CE | Raw MPNet | 0.5452 | 0.4561 | 0.12 |
+| Stress1000 seed23, mxbai CE | mxbai CE top500 | 0.8195 | 0.7044 | 11211.63 |
+| Stress1000 seed23, mxbai CE | ConvMemory candidate-local | 0.7386 | 0.6125 | 95.57 |
+
+Reading: ConvMemory reranks above BGE-large CE on these memory-family Recall@10
+checks while being about 12-47x faster. It remains below mxbai accuracy, but is
+about 28-117x lower latency in the tested settings.
+
+### LoCoMo Strong Cross-Encoder Baselines
+
+Five split seeds: 7, 11, 23, 31, 47. Candidate pool: raw dense top500.
+
+| Reranker | Recall@10 | Hit@10 | MRR |
 |---|---:|---:|---:|
-| Raw dense retrieval | 0.5345 +/- 0.0210 | 0.5894 | 0.3254 +/- 0.0105 |
-| BM25 | 0.5889 | 0.6361 | 0.4305 |
-| Dense + lexical + temporal RRF | 0.6375 | 0.6910 | 0.3997 |
-| Dense + lexical score fusion | 0.6579 | 0.7148 | 0.4682 |
-| MiniLM cross-encoder top500 | 0.7294 +/- 0.0151 | 0.7765 | 0.5968 +/- 0.0132 |
-| ConvMemory | 0.7798 +/- 0.0074 | 0.8350 | 0.5824 +/- 0.0189 |
+| ConvMemory (v0.40 5-seed) | 0.7798 ± 0.0074 | not reported | 0.5824 |
+| BGE-reranker-base | 0.6967 ± 0.0126 | 0.7469 ± 0.0144 | 0.5469 ± 0.0140 |
+| Jina-reranker-v2-base-multilingual | 0.7411 ± 0.0103 | 0.7924 ± 0.0083 | 0.5754 ± 0.0074 |
+| BGE-reranker-large | 0.7621 ± 0.0155 | 0.8124 ± 0.0135 | 0.6120 ± 0.0144 |
+| mxbai-rerank-large-v1 | 0.8080 ± 0.0153 | 0.8486 ± 0.0108 | 0.6687 ± 0.0093 |
 
-Paired bootstrap over 4,955 test questions:
+Reading: ConvMemory is competitive on recall, but it should not be given an
+overall cross-encoder superiority claim. `mxbai-rerank-large-v1` is stronger on
+LoCoMo Recall@10 and MRR.
 
-- ConvMemory vs raw dense: +0.2465 Recall@10, 95% CI [+0.2338, +0.2594], p < 0.001.
-- ConvMemory vs MiniLM cross-encoder top500: +0.0508 Recall@10, 95% CI [+0.0407, +0.0609], p < 0.001.
-- ConvMemory vs MiniLM cross-encoder top500: -0.0139 MRR, 95% CI [-0.0238, -0.0043], p = 0.0038.
+### Retrained Ablation
 
-Interpretation: ConvMemory is stronger on recall coverage in this memory
-setting, while the tested cross-encoder keeps a small but significant advantage
-in top-rank precision.
+Three split seeds, MPNet. These are retrained ablations, not inference-time
+feature masks.
 
-### Feature Ablations
-
-Inference-time feature masking over five seeds. These are diagnostic ablations,
-not separately retrained checkpoints.
-
-| Variant | Recall@10 | Delta vs full | MRR |
+| Variant | Recall@10 | MRR | Delta R@10 vs full |
 |---|---:|---:|---:|
-| Full ConvMemory | 0.7798 | +0.0000 | 0.5824 |
-| No temporal-window feature | 0.7317 | -0.0481 | 0.5556 |
-| No lexical features | 0.6978 | -0.0821 | 0.4790 |
-| No raw dense feature | 0.7650 | -0.0148 | 0.5707 |
-| No router feature | 0.7810 | +0.0012 | 0.5832 |
-| Temporal-window only | 0.5604 | -0.2195 | 0.2776 |
+| full_control | 0.7474 ± 0.0229 | 0.5343 ± 0.0160 | 0.0000 |
+| no_router | 0.7491 ± 0.0213 | 0.5391 ± 0.0137 | +0.0017 ± 0.0020 |
+| no_temporal_w1 | 0.7121 ± 0.0232 | 0.5305 ± 0.0148 | -0.0353 ± 0.0052 |
+| no_lexical | 0.6584 ± 0.0185 | 0.4367 ± 0.0129 | -0.0890 ± 0.0061 |
+| no_lexical_no_router | 0.6574 ± 0.0163 | 0.4342 ± 0.0127 | -0.0899 ± 0.0087 |
 
-The current checkpoint depends on a combination of dense, lexical, and temporal
-signals. The router feature is not a strong standalone contributor in this
-configuration and should be treated as auxiliary.
+Reading: lexical interaction features are the largest contributor. Temporal
+windowing is real but about 2.5x smaller than the lexical contribution in this
+ablation. The router/DCA scalar contributes approximately zero; removing it is
+neutral to slightly positive, so it is treated as an experimental negative
+result rather than a model feature.
 
-### Cross-Encoder And Latency
+### Strong-Backbone Retraining
 
-RTX 4090, three seeds, 200 measured queries per seed, 10 warmup queries per
-seed.
+Three split seeds. ConvMemory is retrained in each embedding space.
 
-`ConvMemory balanced` refers to the built-in compression-routing preset with no
-cross-encoder scoring.
-
-| Method | Recall@10 | Hit@10 | MRR | Mean ms/query | P95 ms/query | Speedup vs CE top500 |
-|---|---:|---:|---:|---:|---:|---:|
-| Raw vector search | 0.5253 | 0.5867 | 0.3112 | 0.9 | 5.7 | 158.21x |
-| ConvMemory balanced | 0.7408 | 0.8083 | 0.5214 | 16.4 | 57.7 | 8.20x |
-| ConvMemory full top500 | 0.7342 | 0.7967 | 0.5222 | 21.1 | 71.4 | 6.37x |
-| Cross-encoder raw top500 | 0.7290 | 0.7750 | 0.5813 | 134.5 | 245.3 | 1.00x |
-| Cross-encoder raw top100 | 0.6633 | 0.7167 | 0.5343 | 22.1 | 24.8 | 6.08x |
-| ConvMemory + CE fusion top100 | 0.7487 | 0.8033 | 0.5887 | 44.0 | 94.9 | 3.05x |
-
-Interpretation: ConvMemory is competitive on Recall@10 at lower latency, while
-the cross-encoder remains stronger at top-rank precision. The best current
-cost-quality tradeoff is using ConvMemory to build a smaller candidate pool for
-a small cross-encoder pass.
-
-### Order Robustness
-
-Five seeds, LoCoMo memory order perturbations.
-
-| Memory order | ConvMemory Recall@10 | Delta vs original | MRR |
-|---|---:|---:|---:|
-| Original | 0.7798 | +0.0000 | 0.5824 |
-| Block shuffle | 0.7740 | -0.0058 | 0.5762 |
-| Shuffle 10% | 0.7681 | -0.0117 | 0.5781 |
-| Shuffle 50% | 0.7351 | -0.0448 | 0.5450 |
-| Shuffle 100% | 0.7158 | -0.0641 | 0.5362 |
-| Reverse | 0.7855 | +0.0056 | 0.5855 |
-
-This suggests ConvMemory benefits from local memory-neighborhood coherence, not
-from a fragile assumption that absolute chronological order must always be
-perfect.
-
-If timestamps are unreliable, use ConvMemory more conservatively:
-
-- prefer `mode="expand"` so the downstream agent receives a slightly wider
-  context;
-- keep raw dense candidates in the final context budget;
-- avoid interpreting scores as calibrated confidence when memory order is known
-  to be corrupted;
-- consider disabling temporal features or retraining with order noise before
-  using ConvMemory as a strict top-k gate.
-
-### Same-Family OOD Check
-
-LoCoMo-trained checkpoint evaluated on LongMemEval-S without LongMemEval
-training. This is a same-family out-of-domain check, not a broad generalization
-claim.
-
-| Method | Questions | Recall@10 | Hit@10 | MRR |
+| Backbone | Raw Recall@10 | ConvMemory Recall@10 | Gain | ConvMemory MRR |
 |---|---:|---:|---:|---:|
-| Raw MPNet retrieval | 500 | 0.905 | 0.946 | 0.783 |
-| MiniLM cross-encoder top500 | 500 | 0.933 | 0.956 | 0.890 |
-| ConvMemory LoCoMo checkpoint | 500 | 0.959 | 0.988 | 0.897 |
+| BGE-large | 0.6680 ± 0.0237 | 0.7726 ± 0.0100 | +0.1046 ± 0.0137 | 0.5639 ± 0.0066 |
+| E5-large | 0.7010 ± 0.0216 | 0.7902 ± 0.0171 | +0.0892 ± 0.0052 | 0.5941 ± 0.0103 |
 
-Paired bootstrap on the fixed 500-question LongMemEval-S set:
+Reading: ConvMemory gains are not just an artifact of a weak MPNet retriever.
+Retraining on stronger embeddings still gives about +9 to +10 Recall@10 points.
 
-- ConvMemory vs raw MPNet: +0.0544 Recall@10, 95% CI [+0.0351, +0.0742], p < 0.001.
-- ConvMemory vs MiniLM cross-encoder: +0.0261 Recall@10, 95% CI [+0.0065, +0.0461], p = 0.0088.
-- ConvMemory vs MiniLM cross-encoder on MRR: +0.0069, 95% CI [-0.0179, +0.0320], not significant.
+### External OOD Results
 
-Stress setting: LongMemEval-S with each question expanded to a 1000-session
-memory pool. Five distractor seeds, candidate-local ConvMemory, top500
-reranking.
+Single run per dataset. These are intentionally reported as mixed evidence.
 
-| Method | Recall@10 | Hit@10 | MRR | Mean ms/query |
-|---|---:|---:|---:|---:|
-| Raw MPNet retrieval | 0.5408 +/- 0.0054 | 0.6704 | 0.4400 +/- 0.0062 | 0.1 |
-| ConvMemory candidate-local | 0.7258 +/- 0.0041 | 0.8280 | 0.6060 +/- 0.0077 | 76.6 |
-| MiniLM cross-encoder top500 | 0.7312 +/- 0.0021 | 0.8440 | 0.6722 +/- 0.0052 | 954.6 |
+| Dataset | Questions | ConvMemory R@10 | Raw dense | Dense + lexical | BM25 |
+|---|---:|---:|---:|---:|---:|
+| QMSum | 272 | 0.5882 | 0.4724 | 0.5423 | 0.5294 |
+| MSC persona | 6155 | 0.9632 | 0.8375 | 0.9765 | 0.9920 |
+| HotpotQA | 1000 | 0.7983 | 0.7682 | 0.8621 | 0.8280 |
+| MuSiQue | 1000 | 0.7635 | 0.8640 | 0.8175 | 0.7245 |
 
-In the 1000-session stress setting, ConvMemory improves over raw MPNet by
-+0.1850 Recall@10, 95% CI [+0.1708, +0.1995]. The Recall@10 gap between
-ConvMemory and MiniLM cross-encoder is not significant, but the cross-encoder
-has significantly better MRR.
+Reading: ConvMemory wins on QMSum and improves strongly over raw dense on MSC,
+but lexical/BM25 baselines dominate MSC's weak persona-overlap labels. On
+HotpotQA, a trivial dense+lexical baseline is stronger. On MuSiQue, ConvMemory
+regresses below raw dense. This is a scope boundary: ConvMemory is a
+temporal-memory reranker, not a general multi-hop document reranker.
 
-The repository also includes `v043_generic_retrieval_eval.py` for converted
-external datasets. A synthetic agent-scratchpad sanity check confirms the JSONL
-adapter works, but it is not a public OOD benchmark.
+### Where ConvMemory Fails
 
-## What The Results Show
-
-Supported by the current experiments:
-
-- ConvMemory substantially improves recall-oriented memory retrieval over raw
-  dense retrieval on LoCoMo-style memory streams.
-- The gain is not explained by a simple BM25, recency, or dense-lexical fusion
-  baseline alone.
-- Temporal neighborhood features provide a measurable contribution.
-- ConvMemory is cheaper than reranking the full top500 pool with the tested
-  MiniLM cross-encoder.
-- ConvMemory can improve a small cross-encoder cascade by providing a better
-  candidate pool.
-- Same-family OOD checks on LongMemEval-S show transfer beyond LoCoMo, including
-  a 1000-session stress setting.
-
-Not yet shown:
-
-- State-of-the-art reranking performance.
-- Robustness across many unrelated datasets.
-- Superiority over stronger rerankers such as BGE, Jina, or mxbai rerankers.
-- End-to-end answer-generation improvement.
-- Production-grade calibrated cross-query thresholding.
+- Non-temporal multi-hop retrieval: MuSiQue is negative against raw dense.
+- Lexically anchored document retrieval: HotpotQA favors dense+lexical scoring.
+- Maximum top-rank precision: mxbai-rerank-large remains stronger on LoCoMo MRR.
+- Cross-query score calibration: scores should not be treated as calibrated
+  confidence without application-specific validation.
+- Corrupted or missing ordering: temporal features are useful, but memory order
+  quality should be validated for production systems.
 
 ## Reproducibility
 
-Main reproduction commands:
+The current documentation reports the hardened v0.47/v0.48 audit. See:
 
-```bash
-python experiments/v040_baselines_ablation_stats.py \
-  --device cuda \
-  --seeds 7 11 23 31 47 \
-  --bootstrap-samples 10000 \
-  --out results/v040/baselines_ablation_stats
+- [docs/EVALUATION_PROTOCOL.md](docs/EVALUATION_PROTOCOL.md)
+- [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
+- [docs/TRAINING.md](docs/TRAINING.md)
 
-python experiments/v041_order_robustness.py \
-  --device cuda \
-  --seeds 7 11 23 31 47 \
-  --out results/v041/order_robustness
-
-python experiments/v042_error_calibration.py \
-  --device cuda \
-  --seeds 7 11 23 31 47 \
-  --out results/v042/error_calibration
-
-python experiments/v036_latency_benchmark.py \
-  --device cuda \
-  --checkpoint checkpoints/convmemory-locomo-mpnet \
-  --encoder-model sentence-transformers/all-mpnet-base-v2 \
-  --cross-encoder-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
-  --seeds 7 11 23 \
-  --limit 200 \
-  --warmup 10 \
-  --cross-batch-size 512 \
-  --out results/v036/latency_benchmark
-
-python experiments/evaluate_longmemeval_zero_shot.py \
-  --device cuda \
-  --checkpoint checkpoints/convmemory-locomo-mpnet \
-  --encoder-model sentence-transformers/all-mpnet-base-v2 \
-  --candidate-top-n 500 \
-  --eval-cross-encoder \
-  --cross-encoder-model cross-encoder/ms-marco-MiniLM-L-6-v2 \
-  --cross-batch-size 512 \
-  --out results/v044/longmemeval_clean_fixed500
-
-python experiments/v046_calibrate_confidence.py \
-  --cases results/v042/error_calibration_mpnet/cases.csv \
-  --out results/v046/confidence_calibration_mpnet
-```
-
-For the full evaluation plan, see
-[docs/EVALUATION_PROTOCOL.md](docs/EVALUATION_PROTOCOL.md). For checkpoint and
-training details, see [docs/MODEL_CARD.md](docs/MODEL_CARD.md) and
-[docs/TRAINING.md](docs/TRAINING.md).
+Main evaluation artifacts were generated under versioned `results/v040` through
+`results/v048` directories. Large per-question CSV files, teacher caches, and
+checkpoints are intentionally kept out of the repository history.
 
 ## Project Status
 
@@ -463,11 +322,10 @@ Stable public API:
 - `ConvMemory.retrieve`
 - `ConvMemory.expand_context`
 - `ConvMemory.rerank_embeddings`
-- `CompressionRouter`
-- `build_compressed_notes`
 
 Research-preview code:
 
+- context expansion policies for wider agent memory budgets;
 - cascade fusion with cross-encoder scoring;
 - stronger cross-encoder comparison scripts;
 - generic JSONL adapters for external memory-retrieval datasets.

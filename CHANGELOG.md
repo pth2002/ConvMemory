@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Hardened the public result claims against the audited v0.47/v0.48 evaluation archive.
+- Retired the previous overbroad cross-encoder framing; `mxbai-rerank-large-v1`
+  outperforms ConvMemory on LoCoMo Recall@10 and MRR.
+- Added strong-CE LoCoMo reporting for BGE-base, Jina trust-mode, BGE-large, and mxbai.
+- Added retrained ablation conclusions: lexical features dominate, temporal
+  windowing contributes, and the router/DCA scalar has approximately zero
+  contribution.
+- Added BGE-large and E5-large backbone-retraining results.
+- Added external OOD reporting with mixed outcomes, including the negative
+  MuSiQue result as scope-boundary evidence.
+- Featured LongMemEval strong-CE cost comparisons as the main practical value
+  proposition.
+- Deprecated the broken remote `results/v047/V047_SUMMARY.md` in favor of the
+  regenerated audited summary.
 - Added a stricter evaluation protocol for ConvMemory results.
 - Added multi-seed LoCoMo baseline, feature-ablation, order-robustness, and calibration scripts.
 - Added full five-seed MiniLM cross-encoder comparison for LoCoMo top500 reranking.

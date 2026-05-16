@@ -54,7 +54,9 @@ The current public checkpoint uses:
 - candidate top-n: 500;
 - raw score fusion weight: 0.025;
 - lexical features: enabled;
-- router feature: enabled.
+- legacy router/DCA scalar slot: present in the historical checkpoint, but
+  v0.48 retrained ablation shows no measurable contribution. Do not tune or
+  report it as a model feature.
 
 ## Reproducibility Notes
 
@@ -84,4 +86,14 @@ python experiments/v040_baselines_ablation_stats.py \
   --cross-encoder-models cross-encoder/ms-marco-MiniLM-L-6-v2,BAAI/bge-reranker-base,BAAI/bge-reranker-large
 ```
 
-For additional embedding backbones, rerun v0.40 with a different `--encoder-model`. A checkpoint trained for MPNet should not be assumed optimal for other embedding spaces.
+The v0.47/v0.48 audit extended this protocol with BGE, Jina trust-mode, and
+mxbai cross-encoder baselines, retrained no-temporal/no-lexical/no-router
+ablations, and BGE-large/E5-large ConvMemory retraining.
+
+For additional embedding backbones, retrain ConvMemory in the target embedding
+space. A checkpoint trained for MPNet should not be assumed optimal for other
+embedding spaces.
+
+The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
+broken `tabulate` import stub. Use the regenerated audited summary instead:
+`remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`.
