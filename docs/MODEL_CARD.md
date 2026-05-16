@@ -88,7 +88,7 @@ Canonical audited summary:
 - The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
   broken `tabulate` import stub.
 
-Note: v0.40-v0.48 are internal evaluation-iteration identifiers for the hardening experiments described below, not packaged PyPI releases. The current installable package version remains 0.3.0; the public checkpoint is unchanged.
+Note: v0.40–v0.48 are internal evaluation-iteration identifiers for the hardening experiments, not packaged PyPI releases. The installable package version remains 0.3.0 and the public checkpoint is unchanged.
 
 Hardened result summary:
 

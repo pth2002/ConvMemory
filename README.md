@@ -190,7 +190,7 @@ Authoritative result source:
 - The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
   broken `tabulate` import stub.
 
-Note: v0.40-v0.48 are internal evaluation-iteration identifiers for the hardening experiments described below, not packaged PyPI releases. The current installable package version remains 0.3.0; the public checkpoint is unchanged.
+Note: v0.40–v0.48 are internal evaluation-iteration identifiers for the hardening experiments, not packaged PyPI releases. The installable package version remains 0.3.0 and the public checkpoint is unchanged.
 
 Important scope notes:
 
@@ -225,7 +225,7 @@ offers a much cheaper reranking stage while remaining recall-competitive.
 | Stress1000 seed23, mxbai CE | mxbai CE top500 | 0.8195 | 0.7044 | 11211.63 |
 | Stress1000 seed23, mxbai CE | ConvMemory candidate-local | 0.7386 | 0.6125 | 95.57 |
 
-Stress1000 numbers are reported for a single seed (23) and are indicative only; Clean500 numbers are not seed-averaged either and should be read as single-run retrieval-stage checks.
+LongMemEval numbers are not seed-averaged: Clean500 is a single run and Stress1000 is reported for a single seed (23). Read these as indicative single-run retrieval-stage checks, not benchmark-grade comparisons.
 
 Reading: ConvMemory reranks above BGE-large CE on these memory-family Recall@10
 checks while being about 12-47x faster. It remains below mxbai accuracy, but is
