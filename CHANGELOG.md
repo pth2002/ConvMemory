@@ -2,15 +2,22 @@
 
 ## Unreleased
 
-- Note: v0.40–v0.48 are internal evaluation-iteration identifiers for the hardening experiments, not packaged PyPI releases. The installable package version remains 0.3.0 and the public checkpoint is unchanged.
+- Note: v0.40-v0.51 are internal evaluation-iteration identifiers for
+  hardening experiments, not packaged PyPI releases. The installable package
+  version remains 0.3.0 and the public checkpoint is unchanged.
 
+- Re-based the documentation onto the v0.50/v0.51 negative result: the learned
+  reranker remains useful, but temporal structure is not supported as the
+  load-bearing mechanism.
+- Added `docs/NEGATIVE_RESULTS.md` with the tuned-heuristic gate, five-seed
+  retrained attribution table, and scope of the temporal-mechanism refutation.
 - Hardened the public result claims against the audited v0.47/v0.48 evaluation archive.
 - Retired the previous overbroad cross-encoder framing; `mxbai-rerank-large-v1`
   outperforms ConvMemory on LoCoMo Recall@10 and MRR.
 - Added strong-CE LoCoMo reporting for BGE-base, Jina trust-mode, BGE-large, and mxbai.
-- Added retrained ablation conclusions: lexical features dominate, temporal
-  windowing contributes, and the router/DCA scalar has approximately zero
-  contribution.
+- Added retrained ablation conclusions: lexical features dominate, the
+  temporal-window effect is not temporally specific in v0.51, and the
+  router/DCA scalar has approximately zero contribution.
 - Added BGE-large and E5-large backbone-retraining results.
 - Added external OOD reporting with mixed outcomes, including the negative
   MuSiQue result as scope-boundary evidence.

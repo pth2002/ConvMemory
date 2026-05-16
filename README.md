@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-ConvMemory is a lightweight temporal memory reranker for long-term
+ConvMemory is a lightweight learned memory reranker for long-term
 conversational and agent memory.
 
 It runs after vector search and before prompt construction:
@@ -14,7 +14,7 @@ user query -> vector search top-k -> ConvMemory -> memory context
 ```
 
 ConvMemory is not a vector database, a full QA system, or a general document
-reranker. Its intended use is recall-oriented memory selection for ordered
+reranker. Its intended use is recall-oriented memory selection for structured
 memory streams: conversations, user histories, agent traces, task logs, and
 session-level notes.
 
@@ -24,7 +24,7 @@ Current package version: `0.3.0`
 
 Use ConvMemory when:
 
-- your memory store has chronological or session structure;
+- your memory store has session or user-history structure;
 - raw vector search misses important neighboring evidence;
 - you need a cheaper high-recall stage before an optional cross-encoder pass;
 - the downstream agent can benefit from a compact, reranked memory context.
@@ -32,7 +32,7 @@ Use ConvMemory when:
 Do not use ConvMemory as:
 
 - a vector database;
-- a general web/document reranker without temporal structure;
+- a general web/document reranker;
 - an end-to-end answer-generation model;
 - a universal replacement for modern cross-encoders.
 
@@ -116,7 +116,7 @@ for item in results:
     print(item.rank, item.memory_id, item.score, item.text)
 ```
 
-Pass memories in chronological order when that order is available.
+Pass memories in a stable application order when that order is available.
 
 ## Agent Memory Integration
 
@@ -189,16 +189,25 @@ Authoritative result source:
 - `remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`
 - The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
   broken `tabulate` import stub.
+- `results/v050/tuned_heuristic_fusion_full/REPORT.md`
+- `results/v051/temporal_attribution_5seed/REPORT.md`
 
-Note: v0.40–v0.48 are internal evaluation-iteration identifiers for the hardening experiments, not packaged PyPI releases. The installable package version remains 0.3.0 and the public checkpoint is unchanged.
+Note: v0.40-v0.51 are internal evaluation-iteration identifiers for hardening
+experiments, not packaged PyPI releases. The installable package version remains
+0.3.0 and the public checkpoint is unchanged.
 
 Important scope notes:
 
 - The public checkpoint is trained on LoCoMo-style data; LoCoMo is in-domain
   for this checkpoint.
+- The headline value proposition is cost-effective learned reranking for memory
+  tasks, plus a rigorous negative result about mechanism attribution.
 - Stronger rerankers matter. ConvMemory beats BGE-reranker-base/large on
   LoCoMo Recall@10, but it loses to `mxbai-rerank-large-v1` on both Recall@10
   and MRR.
+- v0.50/v0.51 refute the stronger claim that temporal structure is the reason
+  ConvMemory works. The learned temporal window contributes statistically, but
+  its benefit is not temporally specific.
 - External OOD results are mixed. The MuSiQue negative result is reported below
   because ConvMemory is not intended as a broad multi-hop document reranker.
 - Latency numbers assume memory embeddings and memory-side indexes are already
@@ -260,11 +269,56 @@ feature masks.
 | no_lexical | 0.6584 ± 0.0185 | 0.4367 ± 0.0129 | -0.0890 ± 0.0061 |
 | no_lexical_no_router | 0.6574 ± 0.0163 | 0.4342 ± 0.0127 | -0.0899 ± 0.0087 |
 
-Reading: lexical interaction features are the largest contributor. Temporal
-windowing is real but about 2.5x smaller than the lexical contribution in this
-ablation. The router/DCA scalar contributes approximately zero; removing it is
-neutral to slightly positive, so it is treated as an experimental negative
-result rather than a model feature.
+Reading: lexical interaction features are the largest contributor. The
+no-temporal variant is weaker than the full model in this three-seed ablation,
+but this table alone does not prove that the gain is temporally specific. The
+router/DCA scalar contributes approximately zero; removing it is neutral to
+slightly positive, so it is treated as an experimental negative result rather
+than a model feature.
+
+### Attribution / Negative Result
+
+The v0.50/v0.51 follow-up was designed to test whether the temporal window is
+the load-bearing reason ConvMemory works. This section uses the retrained
+attribution pipeline, not the v0.40 headline pipeline above.
+
+Five split seeds: 7, 11, 23, 31, 47.
+
+| Method | Recall@10 |
+|---|---:|
+| full_control_retrained | 0.7432 +/- 0.0207 |
+| no_temporal_w1_retrained | 0.7054 +/- 0.0221 |
+| tuned_heuristic | 0.7234 +/- 0.0227 |
+| raw_dense | 0.5345 +/- 0.0210 |
+
+Paired bootstrap, `full_control_retrained - no_temporal_w1_retrained`,
+Recall@10:
+
+| Slice | Delta | 95% CI | Reading |
+|---|---:|---:|---|
+| ALL | +0.0376 | [+0.0306, +0.0451] | significant |
+| T_SUP_auto | +0.0407 | [+0.0219, +0.0603] | significant, open question |
+| T_REQUIRED_auto | +0.0252 | [+0.0139, +0.0363] | significant |
+| T_HOP_auto | +0.0096 | [-0.0037, +0.0230] | not significant |
+| OTHER | +0.0868 | [+0.0672, +0.1045] | significant |
+| HARD_NON_TEMPORAL_auto | +0.0838 | [+0.0650, +0.1040] | significant |
+
+The honest reading is negative for the original temporal-mechanism thesis: the
+learned temporal window contributes on aggregate, but its benefit is largest on
+hard non-temporal controls (`OTHER` and `HARD_NON_TEMPORAL_auto`) and is not
+statistically significant on the most temporal multi-hop proxy (`T_HOP_auto`).
+This looks more like generic neighborhood/capacity smoothing than proven
+temporal-structure exploitation. `T_SUP_auto` remains the only notable open
+question, but it is still smaller than the hard non-temporal control effect and
+should not be used as a load-bearing temporal claim.
+
+Against the tuned heuristic, the same retrained attribution pipeline gives
+`full_control_retrained` a Recall@10 delta of +0.0199 with 95% CI
+[+0.0105, +0.0283], and an MRR delta of +0.0566. So the learned reranker still
+adds value; the negative result is about why it works.
+
+See [docs/NEGATIVE_RESULTS.md](docs/NEGATIVE_RESULTS.md) for the full
+v0.50/v0.51 interpretation.
 
 ### Strong-Backbone Retraining
 
@@ -294,8 +348,8 @@ These external OOD results are single runs without seed averaging or confidence 
 Reading: ConvMemory wins on QMSum and improves strongly over raw dense on MSC,
 but lexical/BM25 baselines dominate MSC's weak persona-overlap labels. On
 HotpotQA, a trivial dense+lexical baseline is stronger. On MuSiQue, ConvMemory
-regresses below raw dense. This is a scope boundary: ConvMemory is a
-temporal-memory reranker, not a general multi-hop document reranker.
+regresses below raw dense. This is a scope boundary: ConvMemory is a memory
+reranker, not a general multi-hop document reranker.
 
 ### Where ConvMemory Fails
 
@@ -304,19 +358,19 @@ temporal-memory reranker, not a general multi-hop document reranker.
 - Maximum top-rank precision: mxbai-rerank-large remains stronger on LoCoMo MRR.
 - Cross-query score calibration: scores should not be treated as calibrated
   confidence without application-specific validation.
-- Corrupted or missing ordering: temporal features are useful, but memory order
-  quality should be validated for production systems.
+- Mechanism attribution: v0.51 does not support temporal structure as the
+  load-bearing explanation for ConvMemory's gain.
 
 ## Reproducibility
 
-The current documentation reports the hardened v0.47/v0.48 audit. See:
+The current documentation reports the hardened v0.47/v0.51 audit. See:
 
 - [docs/EVALUATION_PROTOCOL.md](docs/EVALUATION_PROTOCOL.md)
 - [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
 - [docs/TRAINING.md](docs/TRAINING.md)
 
 Main evaluation artifacts were generated under versioned `results/v040` through
-`results/v048` directories. Large per-question CSV files, teacher caches, and
+`results/v051` directories. Large per-question CSV files, teacher caches, and
 checkpoints are intentionally kept out of the repository history.
 
 ## Project Status

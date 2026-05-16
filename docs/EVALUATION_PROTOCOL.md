@@ -28,6 +28,8 @@ claim that every optional experiment has been completed.
 | External OOD: QMSum, MSC, HotpotQA, MuSiQue | Done | `remote_results_archive/.../results/v047/external_ood` | Single run each; report as mixed evidence. |
 | Retrained feature ablation | Done | `remote_results_archive/.../results/v048/retrained_ablation_3seed` | 3 seeds; includes no-temporal, no-lexical, no-router. |
 | BGE-large and E5-large backbone retraining | Done | `remote_results_archive/.../results/v048/backbone_3seed_summary` | 3 seeds each; model retrained in each embedding space. |
+| Tuned heuristic gate | Done | `results/v050/tuned_heuristic_fusion_full` | 5 seeds; learned model remains above a strong dense/BM25/neighbor/decay heuristic. |
+| Temporal attribution check | Done | `results/v051/temporal_attribution_5seed` | 5 seeds; temporal-window gain is not temporally specific. |
 | End-to-end answer generation evaluation | Pending | none | Retrieval-stage results do not prove QA improvements. |
 | Production calibration / abstention thresholding | Pending | none | Needs application-specific validation. |
 
@@ -82,8 +84,9 @@ v0.40 includes:
 - dense + lexical RRF;
 - dense + lexical + temporal-window RRF.
 
-These are the first baselines to check before claiming that neural temporal
-reranking is necessary.
+These are the first baselines to check before attributing gains to a neural
+mechanism. v0.50/v0.51 show that the learned reranker remains useful, but the
+temporal-specific explanation is not supported.
 
 ## 4. Retrained Ablations
 
@@ -101,8 +104,8 @@ Completed v0.48 variants:
 
 Interpretation:
 
-- lexical features are the largest contributor;
-- temporal windowing is real but secondary;
+- lexical features are the largest contributor in the earlier ablation;
+- the later v0.51 attribution check does not support temporal specificity;
 - the router/DCA scalar contributes approximately zero and should not be
   presented as a feature.
 
@@ -192,7 +195,7 @@ cross-encoder serving stack without clearly labeling the limitation.
 
 Safe claim:
 
-> ConvMemory is a lightweight temporal memory reranker that improves
+> ConvMemory is a lightweight learned memory reranker that improves
 > recall-oriented memory selection over raw dense retrieval on session-structured
 > memory tasks, with much lower latency than full top500 modern cross-encoder
 > reranking in the tested memory-family settings.
@@ -202,4 +205,5 @@ Avoid:
 > ConvMemory has broad leaderboard leadership.
 > ConvMemory has broad cross-encoder superiority.
 > ConvMemory is proven robust across unrelated retrieval datasets.
+> ConvMemory is proven to work because it exploits temporal order.
 > The retired router scalar is a core contributor.

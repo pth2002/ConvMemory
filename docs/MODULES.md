@@ -7,7 +7,7 @@ Runtime code lives in the installable `convmemory/` package:
 
 - `convmemory/api.py`: user-facing `ConvMemory` wrapper.
 - `convmemory/reranker.py`: embedding-level reranking and candidate-local windowing.
-- `convmemory/encoder.py`: temporal Conv/Mixer window encoder.
+- `convmemory/encoder.py`: Conv/Mixer candidate-window encoder.
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
@@ -27,20 +27,24 @@ architecture. It is designed for agent systems where the downstream LLM can read
 more than the strict top-k and missing a key memory is worse than including a
 few additional candidates.
 
-## 1. Temporal Conv/Mixer Encoder
+## 1. Conv/Mixer Candidate-Window Encoder
 
-The core memory encoder reads a short temporal window of memory embeddings:
+The core memory encoder reads a short candidate-local window of memory
+embeddings:
 
 ```text
-[memory_t-2, memory_t-1, memory_t, memory_t+1, memory_t+2]
+[candidate_i-2, candidate_i-1, candidate_i, candidate_i+1, candidate_i+2]
 ```
 
-It uses lightweight temporal convolution plus Mixer-style token/channel mixing
-to model local event-chain structure.
+It uses lightweight convolution plus Mixer-style token/channel mixing over this
+candidate window.
 
-Retrained v0.48 ablation shows that this temporal signal is real but secondary:
-removing temporal context with `window_size=1` reduces Recall@10 by 0.0353
-relative to the full model.
+The older v0.48 ablation showed that `window_size=1` is weaker than the full
+model. The newer v0.51 attribution check is stricter: the window contributes on
+aggregate, but its gain is largest on hard non-temporal controls and is not
+significant on the T_HOP temporal proxy. Therefore this encoder should be
+described as a learned candidate-neighborhood module, not as proven temporal
+structure exploitation.
 
 ## 2. Lexical Features
 
@@ -64,7 +68,7 @@ The CE-lite scorer fuses:
 - query-memory interaction features;
 - raw dense score;
 - ConvMemory window score;
-- rank and temporal-position features;
+- rank and position features;
 - lexical features.
 
 It is not a token-level cross-encoder. It operates over precomputed embeddings
@@ -73,7 +77,7 @@ plus lightweight side features.
 The current module description is:
 
 ```text
-Temporal Conv/Mixer + lexical/query interaction CE-lite reranking
+Conv/Mixer candidate-window + lexical/query interaction CE-lite reranking
 ```
 
 ## 4. Retired Experimental Router Scalar
@@ -105,7 +109,7 @@ The current best setting usually keeps `raw_weight` near `0` to `0.025`.
 `ConvMemory.expand_context(...)` and `ConvMemory.retrieve(..., mode="expand")`
 protect the strongest ConvMemory results, then fill the remaining context budget
 from complementary rankings. The default policy uses the main ConvMemory
-ranking, raw dense retrieval, and candidate-local temporal scoring.
+ranking, raw dense retrieval, and candidate-local window scoring.
 
 Expansion is useful when the downstream agent can read a wider context and the
 cost of missing a key memory is higher than the cost of including a few extra
@@ -121,8 +125,8 @@ ConvMemory reranking:
 query embedding -> compressed-note search -> raw memory candidate ids -> ConvMemory rerank
 ```
 
-This is separate from the neural reranker and is not part of the core v0.48
-architecture claim.
+This is separate from the neural reranker and is not part of the core v0.51
+mechanism claim.
 
 ## 8. Cascade Fusion Research Path
 
