@@ -190,6 +190,8 @@ Authoritative result source:
 - The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
   broken `tabulate` import stub.
 
+Note: v0.40-v0.48 are internal evaluation-iteration identifiers for the hardening experiments described below, not packaged PyPI releases. The current installable package version remains 0.3.0; the public checkpoint is unchanged.
+
 Important scope notes:
 
 - The public checkpoint is trained on LoCoMo-style data; LoCoMo is in-domain
@@ -222,6 +224,8 @@ offers a much cheaper reranking stage while remaining recall-competitive.
 | Stress1000 seed23, mxbai CE | Raw MPNet | 0.5452 | 0.4561 | 0.12 |
 | Stress1000 seed23, mxbai CE | mxbai CE top500 | 0.8195 | 0.7044 | 11211.63 |
 | Stress1000 seed23, mxbai CE | ConvMemory candidate-local | 0.7386 | 0.6125 | 95.57 |
+
+Stress1000 numbers are reported for a single seed (23) and are indicative only; Clean500 numbers are not seed-averaged either and should be read as single-run retrieval-stage checks.
 
 Reading: ConvMemory reranks above BGE-large CE on these memory-family Recall@10
 checks while being about 12-47x faster. It remains below mxbai accuracy, but is
@@ -284,6 +288,8 @@ Single run per dataset. These are intentionally reported as mixed evidence.
 | MSC persona | 6155 | 0.9632 | 0.8375 | 0.9765 | 0.9920 |
 | HotpotQA | 1000 | 0.7983 | 0.7682 | 0.8621 | 0.8280 |
 | MuSiQue | 1000 | 0.7635 | 0.8640 | 0.8175 | 0.7245 |
+
+These external OOD results are single runs without seed averaging or confidence intervals; treat them as indicative scope checks, not benchmark-grade comparisons.
 
 Reading: ConvMemory wins on QMSum and improves strongly over raw dense on MSC,
 but lexical/BM25 baselines dominate MSC's weak persona-overlap labels. On

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Note: v0.40-v0.48 are internal evaluation-iteration identifiers for the hardening experiments described below, not packaged PyPI releases. The current installable package version remains 0.3.0; the public checkpoint is unchanged.
+
 - Hardened the public result claims against the audited v0.47/v0.48 evaluation archive.
 - Retired the previous overbroad cross-encoder framing; `mxbai-rerank-large-v1`
   outperforms ConvMemory on LoCoMo Recall@10 and MRR.
