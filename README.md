@@ -42,11 +42,11 @@ The strongest current deployment pattern is a cascade:
 vector top500 -> ConvMemory candidate stage -> optional small cross-encoder -> memory context
 ```
 
-Research preview: conflict-aware candidate-set editors can be inserted after
-ConvMemory to repair stale/current memory conflicts. See
-[CCGE-LA](docs/CCGE_LA.md) and the broader
-[research trajectory](docs/RESEARCH_TRAJECTORY.md). This editor is not yet a
-stable public API or shipped checkpoint.
+Public alpha: the CCGE-LA conflict editor can be inserted after ConvMemory to
+repair stale/current memory conflicts. See [CCGE-LA](docs/CCGE_LA.md) and the
+broader [research trajectory](docs/RESEARCH_TRAJECTORY.md). The API is
+available in `convmemory.ccge`; trained editor weights are not yet shipped as a
+public checkpoint.
 
 ## Installation
 
@@ -178,6 +178,21 @@ ranked = memory_reranker.rerank_embeddings(
     candidate_indices=candidate_indices,
     query=query,
     top_k=20,
+)
+```
+
+To enable the CCGE-LA conflict editor after ConvMemory, attach a trained editor
+checkpoint and pass `editor="ccge_la"`:
+
+```python
+memory_reranker.load_ccge_editor("checkpoints/my-ccge-la/ccge_la.pt")
+
+ranked = memory_reranker.retrieve(
+    query=query,
+    memories=candidates,
+    mode="rerank",
+    editor="ccge_la",
+    top_k=15,
 )
 ```
 
@@ -392,13 +407,18 @@ Stable public API:
 - `ConvMemory.expand_context`
 - `ConvMemory.rerank_embeddings`
 
+Public alpha API:
+
+- `ConvMemory.attach_ccge_editor`
+- `ConvMemory.load_ccge_editor`
+- `CCGELowAmplitudeEditor`
+- `build_ccge_features`
+
 Research-preview code:
 
 - context expansion policies for wider agent memory budgets;
 - cascade fusion with cross-encoder scoring;
 - stronger cross-encoder comparison scripts;
-- CCGE-LA conflict-aware candidate-set editing for stale/current memory
-  conflicts;
 - generic JSONL adapters for external memory-retrieval datasets.
 
 Not included in the public package:
@@ -409,10 +429,9 @@ Not included in the public package:
 - exploratory numbered experiment prototypes unless they are explicitly promoted
   into the documented public API.
 
-Conflict-aware ConvMemory editors, including candidate-set conflict-state
-editing for stale/current memory conflicts, are an active research direction.
-They should be treated as research prototypes until they are packaged behind a
-stable API and documented with reproducible public commands.
+CCGE-LA is packaged as a public alpha API for conflict-aware ConvMemory editing.
+It should still be treated as experimental until a public training recipe and
+checkpoint are released.
 
 ## License
 

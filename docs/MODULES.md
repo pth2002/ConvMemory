@@ -9,6 +9,7 @@ Runtime code lives in the installable `convmemory/` package:
 - `convmemory/reranker.py`: embedding-level reranking and candidate-local windowing.
 - `convmemory/encoder.py`: Conv/Mixer candidate-window encoder.
 - `convmemory/scoring.py`: CE-lite scorer, lexical cache, and score fusion helpers.
+- `convmemory/ccge.py`: CCGE-LA conflict-aware candidate-set editor.
 - `convmemory/metrics.py`: small retrieval metrics used by examples and experiments.
 
 The `experiments/support/` helpers are used by the reproduction scripts. They
@@ -21,6 +22,11 @@ The public API intentionally exposes two stable modes:
 - `rerank`: score and reorder candidate memories.
 - `expand`: keep a protected reranked prefix, then add complementary candidates
   for a wider agent memory context.
+
+Both modes can optionally run the public alpha CCGE-LA editor after ConvMemory
+by passing `editor="ccge_la"` to `retrieve`, `rerank`, or `rerank_embeddings`.
+The editor must first be attached with `attach_ccge_editor(...)` or loaded with
+`load_ccge_editor(...)`.
 
 The expansion mode is a context-construction layer, not a separate neural
 architecture. It is designed for agent systems where the downstream LLM can read
@@ -138,3 +144,28 @@ ConvMemory candidate stage -> small cross-encoder pass -> normalized score fusio
 ```
 
 Treat this as a research-preview path rather than the default library interface.
+
+## 9. CCGE-LA Conflict Editor
+
+CCGE-LA is a public alpha candidate-set editor for stale/current memory
+conflicts:
+
+```text
+vector search -> ConvMemory -> CCGE-LA low-amplitude edit -> context
+```
+
+The editor reads the ConvMemory candidate set, builds conflict-state features,
+and applies a small gated residual update to ConvMemory scores. It is intended
+to repair cases where old and current memories are semantically similar and the
+gold memory is already in the candidate pool.
+
+The public API is:
+
+- `CCGELowAmplitudeEditor`
+- `build_ccge_features`
+- `ConvMemory.attach_ccge_editor`
+- `ConvMemory.load_ccge_editor`
+- `editor="ccge_la"` in `retrieve`, `rerank`, and `rerank_embeddings`
+
+The current repository exposes the API but does not ship trained CCGE-LA
+weights. Randomly initialized editors are useful only for smoke tests.

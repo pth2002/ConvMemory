@@ -1,7 +1,6 @@
 # CCGE-LA: Conflict-Aware ConvMemory Editor
 
-CCGE-LA is the current research-preview structure for stale/current memory
-conflicts.
+CCGE-LA is the public alpha structure for stale/current memory conflicts.
 
 The name means:
 
@@ -54,23 +53,49 @@ The gate is query/candidate-set level and intentionally low-amplitude. Internal
 experiments found that making the gate more granular at the candidate level was
 less stable than a small query-level editor.
 
-## Public Prototype
+## Public API
 
-A clean research-preview implementation is provided in:
+The installable implementation lives in:
 
 ```text
-experiments/ccge_la_research_preview.py
+convmemory/ccge.py
 ```
 
 It exposes:
 
-- `build_conflict_features`
+- `build_ccge_features`
 - `CCGELowAmplitudeEditor`
 - `multi_positive_retrieval_loss`
 - `rank_candidates`
 
-This file is an architecture and training scaffold, not a pretrained public
-checkpoint.
+The old `experiments/ccge_la_research_preview.py` file is now a compatibility
+wrapper around the package module.
+
+Minimal usage:
+
+```python
+from convmemory import CCGELowAmplitudeEditor, ConvMemory
+
+model = ConvMemory.from_pretrained("checkpoints/convmemory-locomo-mpnet")
+model.load_ccge_editor("checkpoints/my-ccge-la/ccge_la.pt")
+
+results = model.retrieve(
+    query="What is the user's current hiking plan?",
+    memories=memories,
+    mode="rerank",
+    editor="ccge_la",
+    top_k=10,
+)
+```
+
+For development and smoke tests, an editor can also be attached directly:
+
+```python
+model.attach_ccge_editor(CCGELowAmplitudeEditor())
+```
+
+That creates a randomly initialized editor. It verifies the API path, but it is
+not a useful retrieval model until trained.
 
 ## Training Signal
 
@@ -86,6 +111,43 @@ Do not train it with:
 - offline distillation as the defining mechanism.
 
 Those shortcuts would undermine the structural claim.
+
+Minimal training skeleton:
+
+```python
+import torch
+
+from convmemory import CCGELowAmplitudeEditor, build_ccge_features
+from convmemory import multi_positive_retrieval_loss
+
+editor = CCGELowAmplitudeEditor()
+optimizer = torch.optim.AdamW(editor.parameters(), lr=2e-4)
+
+batch = build_ccge_features(
+    candidate_ids=candidate_ids,
+    convmemory_scores=convmemory_scores,
+    dense_scores=dense_scores,
+    positions=memory_positions,
+    candidate_embeddings=candidate_embeddings,
+    query=query,
+    candidate_texts=candidate_texts,
+)
+
+features = torch.tensor(batch.features, dtype=torch.float32).unsqueeze(0)
+gold_mask = torch.tensor([[cid in gold_ids for cid in batch.candidate_ids]])
+
+scores, gate = editor(features)
+loss = multi_positive_retrieval_loss(scores, gold_mask)
+loss.backward()
+optimizer.step()
+```
+
+After training, save the editor and attach it to ConvMemory:
+
+```python
+editor.save_pretrained("checkpoints/my-ccge-la")
+memory_reranker.load_ccge_editor("checkpoints/my-ccge-la")
+```
 
 ## Internal Evidence Summary
 
@@ -130,11 +192,10 @@ reranker. For maximum accuracy, a cross-encoder can still be used after it.
 
 ## Current Status
 
-CCGE-LA is a research-preview structure. Before it becomes a stable public API,
-it still needs:
+CCGE-LA is a public alpha API. Before it becomes a stable default feature, it
+still needs:
 
-- a public training recipe;
 - a packaged checkpoint;
-- deterministic feature extraction integrated with `ConvMemory.retrieve`;
+- an end-to-end reproducible public training/evaluation command;
 - same-split comparisons against raw dense retrieval, ConvMemory, and a strong
   cross-encoder.

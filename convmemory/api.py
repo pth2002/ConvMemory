@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 
+from .ccge import CCGELowAmplitudeEditor, build_ccge_features
 from .models import build_default_components
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .scoring import cosine_scores, lexical_signature
@@ -27,12 +28,14 @@ class ConvMemory:
         embedding_model=None,
         embedding_model_name=None,
         model_config=None,
+        ccge_editor=None,
     ):
         self.device = device
         self.config = config or RerankConfig()
         self.embedding_model_name = embedding_model_name
         self.embedding_model = embedding_model
         self.model_config = model_config or {}
+        self.ccge_editor = None
         self.reranker = ConvMemoryReranker(
             conv_model=conv_model,
             scorer=scorer,
@@ -41,6 +44,8 @@ class ConvMemory:
         )
         self.reranker.conv_model.eval()
         self.reranker.scorer.eval()
+        if ccge_editor is not None:
+            self.attach_ccge_editor(ccge_editor)
 
     @classmethod
     def from_config(
@@ -49,6 +54,7 @@ class ConvMemory:
         device="cpu",
         embedding_model=None,
         config=None,
+        ccge_editor=None,
         **model_kwargs,
     ):
         rerank_config = config or RerankConfig()
@@ -80,10 +86,17 @@ class ConvMemory:
             embedding_model=embedder,
             embedding_model_name=embedding_model,
             model_config=model_config,
+            ccge_editor=ccge_editor,
         )
 
     @classmethod
-    def from_pretrained(cls, path, device="cpu", embedding_model=None):
+    def from_pretrained(
+        cls,
+        path,
+        device="cpu",
+        embedding_model=None,
+        load_ccge: bool = True,
+    ):
         path = Path(path)
         metadata = json.loads((path / "config.json").read_text(encoding="utf-8"))
         rerank_config = RerankConfig(**metadata["rerank_config"])
@@ -102,6 +115,11 @@ class ConvMemory:
         if embedding_model_name:
             embedder = SentenceTransformer(embedding_model_name, device=device)
 
+        ccge_editor = None
+        ccge_path = path / "ccge_la.pt"
+        if load_ccge and ccge_path.exists():
+            ccge_editor = CCGELowAmplitudeEditor.from_pretrained(ccge_path, device=device)
+
         return cls(
             conv_model=conv_model,
             scorer=scorer,
@@ -110,6 +128,7 @@ class ConvMemory:
             embedding_model=embedder,
             embedding_model_name=embedding_model_name,
             model_config=model_config,
+            ccge_editor=ccge_editor,
         )
 
     def save_pretrained(self, path):
@@ -133,6 +152,26 @@ class ConvMemory:
             },
             path / "model.pt",
         )
+        if self.ccge_editor is not None:
+            self.ccge_editor.save_pretrained(path / "ccge_la.pt")
+
+    def attach_ccge_editor(self, editor):
+        """Attach a trained CCGE-LA editor to this ConvMemory instance."""
+
+        if not isinstance(editor, CCGELowAmplitudeEditor):
+            raise TypeError("editor must be a CCGELowAmplitudeEditor")
+        self.ccge_editor = editor.to(self.device).eval()
+        return self
+
+    def load_ccge_editor(self, path, strict: bool = True):
+        """Load and attach a CCGE-LA editor checkpoint."""
+
+        self.ccge_editor = CCGELowAmplitudeEditor.from_pretrained(
+            path,
+            device=self.device,
+            strict=strict,
+        )
+        return self
 
     def encode(self, texts):
         if self.embedding_model is None:
@@ -164,6 +203,8 @@ class ConvMemory:
         top_k: Optional[int] = None,
         candidate_ids: Optional[Iterable[str]] = None,
         window_mode=None,
+        editor=None,
+        ccge_top_n: Optional[int] = None,
     ):
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
@@ -177,7 +218,7 @@ class ConvMemory:
                 for memory_id in candidate_ids
                 if str(memory_id) in id_to_idx
             ]
-        results = self.reranker.rerank_embeddings(
+        results = self.rerank_embeddings(
             query_embedding=query_embedding,
             memory_embeddings=memory_embeddings,
             memory_ids=memory_ids,
@@ -185,6 +226,8 @@ class ConvMemory:
             query=query,
             candidate_indices=candidate_indices,
             window_mode=window_mode,
+            editor=editor,
+            ccge_top_n=ccge_top_n,
         )
         return results[:top_k] if top_k is not None else results
 
@@ -200,6 +243,8 @@ class ConvMemory:
         expansion_policy: str = "balanced",
         expert_rankers: Optional[Sequence["ConvMemory"]] = None,
         window_mode=None,
+        editor=None,
+        ccge_top_n: Optional[int] = None,
     ):
         """Retrieve memories with a stable public mode switch.
 
@@ -215,6 +260,8 @@ class ConvMemory:
                 top_k=top_k,
                 candidate_ids=candidate_ids,
                 window_mode=window_mode,
+                editor=editor,
+                ccge_top_n=ccge_top_n,
             )
         if selected_mode not in {"expand", "context", "expand_context"}:
             raise ValueError("mode must be either 'rerank' or 'expand'")
@@ -234,6 +281,8 @@ class ConvMemory:
             expansion_policy=expansion_policy,
             expert_rankers=expert_rankers,
             window_mode=window_mode,
+            editor=editor,
+            ccge_top_n=ccge_top_n,
         )
 
     def expand_context(
@@ -246,6 +295,8 @@ class ConvMemory:
         expansion_policy: str = "balanced",
         expert_rankers: Optional[Sequence["ConvMemory"]] = None,
         window_mode=None,
+        editor=None,
+        ccge_top_n: Optional[int] = None,
     ):
         """Build a slightly wider memory context for an agent or LLM.
 
@@ -278,6 +329,8 @@ class ConvMemory:
             expansion_policy=expansion_policy,
             expert_rankers=expert_rankers,
             window_mode=window_mode,
+            editor=editor,
+            ccge_top_n=ccge_top_n,
         )
 
     def rerank_embeddings(
@@ -290,6 +343,8 @@ class ConvMemory:
         top_k: Optional[int] = None,
         candidate_indices=None,
         window_mode=None,
+        editor=None,
+        ccge_top_n: Optional[int] = None,
     ):
         results = self.reranker.rerank_embeddings(
             query_embedding=query_embedding,
@@ -299,6 +354,17 @@ class ConvMemory:
             query=query,
             candidate_indices=candidate_indices,
             window_mode=window_mode,
+        )
+        results = self._maybe_apply_editor(
+            results=results,
+            query_embedding=query_embedding,
+            memory_embeddings=memory_embeddings,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            candidate_indices=candidate_indices,
+            editor=editor,
+            ccge_top_n=ccge_top_n,
         )
         return results[:top_k] if top_k is not None else results
 
@@ -315,6 +381,8 @@ class ConvMemory:
         expansion_policy: str = "balanced",
         expert_rankers: Optional[Sequence["ConvMemory"]] = None,
         window_mode=None,
+        editor=None,
+        ccge_top_n: Optional[int] = None,
     ):
         if context_budget <= 0:
             return []
@@ -334,6 +402,8 @@ class ConvMemory:
             query=query,
             candidate_indices=candidate_indices,
             window_mode=window_mode,
+            editor=editor,
+            ccge_top_n=ccge_top_n,
         )
         if context_budget <= protected_k:
             return self._rerank_with_new_positions(base_results[:context_budget])
@@ -363,6 +433,8 @@ class ConvMemory:
                 query=query,
                 candidate_indices=candidate_indices,
                 window_mode="candidate_local",
+                editor=editor,
+                ccge_top_n=ccge_top_n,
             )
             rankings.append([result.memory_id for result in local_results])
             result_by_id.update({result.memory_id: result for result in local_results})
@@ -397,6 +469,129 @@ class ConvMemory:
                 context_budget=int(context_budget),
             )
         return self._rerank_with_new_positions(selected)
+
+    def _resolve_editor(self, editor):
+        if editor is None or editor is False:
+            return None
+        if isinstance(editor, CCGELowAmplitudeEditor):
+            return editor.to(self.device).eval()
+        if editor is True:
+            editor = "ccge_la"
+        if isinstance(editor, str):
+            name = editor.lower().strip()
+            if name in {"", "none", "convmemory"}:
+                return None
+            if name not in {"ccge", "ccge_la", "ccge-la"}:
+                raise ValueError("editor must be None, 'ccge_la', or a CCGELowAmplitudeEditor")
+            if self.ccge_editor is None:
+                raise ValueError(
+                    "No CCGE-LA editor is attached. Call `load_ccge_editor(path)` "
+                    "or `attach_ccge_editor(editor)` before using editor='ccge_la'."
+                )
+            return self.ccge_editor
+        raise TypeError("editor must be None, a string, or a CCGELowAmplitudeEditor")
+
+    def _maybe_apply_editor(
+        self,
+        *,
+        results,
+        query_embedding,
+        memory_embeddings,
+        memory_ids,
+        memory_texts,
+        query,
+        candidate_indices,
+        editor,
+        ccge_top_n: Optional[int],
+    ):
+        editor_module = self._resolve_editor(editor)
+        if editor_module is None or not results:
+            return results
+        return self._apply_ccge_editor(
+            results=results,
+            editor=editor_module,
+            memory_embeddings=memory_embeddings,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            candidate_indices=candidate_indices,
+            ccge_top_n=ccge_top_n,
+        )
+
+    def _apply_ccge_editor(
+        self,
+        *,
+        results,
+        editor,
+        memory_embeddings,
+        memory_ids,
+        memory_texts,
+        query,
+        candidate_indices,
+        ccge_top_n: Optional[int],
+    ):
+        memory_ids = [str(memory_id) for memory_id in memory_ids]
+        id_to_idx = {memory_id: i for i, memory_id in enumerate(memory_ids)}
+
+        if candidate_indices is None:
+            edit_count = min(int(self.config.candidate_top_n), len(results))
+            edit_candidates = list(results[:edit_count])
+        else:
+            candidate_ids = {
+                memory_ids[int(idx)]
+                for idx in np.asarray(candidate_indices, dtype=np.int64)
+                if 0 <= int(idx) < len(memory_ids)
+            }
+            edit_candidates = [result for result in results if result.memory_id in candidate_ids]
+
+        if ccge_top_n is not None:
+            edit_candidates = edit_candidates[: max(0, int(ccge_top_n))]
+        if not edit_candidates:
+            return results
+
+        edit_ids = [result.memory_id for result in edit_candidates]
+        edit_id_set = set(edit_ids)
+        edit_indices = [id_to_idx[memory_id] for memory_id in edit_ids]
+        matrix = np.asarray(memory_embeddings, dtype=np.float32)
+        if matrix.shape[0] != len(memory_ids):
+            raise ValueError("memory_embeddings must match memory_ids")
+
+        text_by_id = {result.memory_id: result.text for result in results}
+        if memory_texts is not None:
+            for memory_id, text in zip(memory_ids, memory_texts):
+                text_by_id.setdefault(memory_id, text)
+        candidate_texts = [text_by_id.get(memory_id) or "" for memory_id in edit_ids]
+
+        batch = build_ccge_features(
+            candidate_ids=edit_ids,
+            convmemory_scores=[result.score for result in edit_candidates],
+            dense_scores=[result.raw_score for result in edit_candidates],
+            positions=edit_indices,
+            candidate_embeddings=matrix[edit_indices],
+            query=query,
+            candidate_texts=candidate_texts,
+        )
+        edited_scores, _ = editor.edit_batch(batch, device=self.device)
+        score_by_id = {
+            memory_id: float(score)
+            for memory_id, score in zip(edit_ids, edited_scores)
+        }
+        original_by_id = {result.memory_id: result for result in results}
+        edited_results = [
+            RerankResult(
+                memory_id=memory_id,
+                score=score_by_id[memory_id],
+                raw_score=original_by_id[memory_id].raw_score,
+                rank=rank,
+                text=original_by_id[memory_id].text,
+            )
+            for rank, memory_id in enumerate(
+                sorted(edit_ids, key=lambda memory_id: score_by_id[memory_id], reverse=True),
+                start=1,
+            )
+        ]
+        tail = [result for result in results if result.memory_id not in edit_id_set]
+        return self._rerank_with_new_positions([*edited_results, *tail])
 
     @staticmethod
     def _raw_ranking_ids(query_embedding, memory_embeddings, memory_ids, candidate_indices=None):
