@@ -1,22 +1,10 @@
 # Changelog
 
-## ccge-la-alpha-v0.1 - 2026-05-21
-
-- Added public alpha API exports: `CCGELowAmplitudeEditor`, `CCGEConfig`,
-  `CCGEFeatureBatch`, `build_ccge_features`,
-  `multi_positive_retrieval_loss`, and `rank_candidates`.
-- Added `ConvMemory.attach_ccge_editor` and `ConvMemory.load_ccge_editor`.
-- Added `editor=` and `ccge_top_n=` parameters to `rerank`, `retrieve`,
-  `expand_context`, `rerank_embeddings`, and `expand_context_embeddings`.
-  They are disabled by default and preserve prior behavior unless explicitly
-  enabled.
-- Added `load_ccge` to `ConvMemory.from_pretrained`.
-- Published the alpha LoCoMo/MPNet seed-23 editor checkpoint with SHA256
-  `459ecfb2b4c35887f1d8f2cdd87dab402c37bd8dee86628655eff08f314b2e7c`.
-- Marked the CCGE-LA release as alpha: the interface may receive small changes,
-  and the checkpoint is a single seed-23 point.
-
 ## Unreleased
+
+- No unreleased changes.
+
+## 0.4.0 - 2026-05-21
 
 - Added Hugging Face Hub checkpoint loading for `ConvMemory.from_pretrained`
   and `ConvMemory.load_ccge_editor`; Hub repo ids such as
@@ -43,11 +31,6 @@
   `True`, `False`, `""`, `"none"`, `"convmemory"`, `"ccge"`, and `"ccge-la"`
   now raise `ValueError`.
 - Documented public `ConvMemory` methods with API-focused docstrings.
-
-- Note: v0.40-v0.51 are internal evaluation-iteration identifiers for
-  hardening experiments, not packaged PyPI releases. The installable package
-  version remains 0.3.0 and the public checkpoint is unchanged.
-
 - Re-based the documentation onto the v0.50/v0.51 negative result: the learned
   reranker remains useful, but temporal structure is not supported as the
   load-bearing mechanism.
@@ -74,7 +57,24 @@
 - Added post-hoc confidence calibration script.
 - Added model card and public training documentation.
 - Rewrote the README to separate supported claims from open research items.
-- Fixed `v040_baselines_ablation_stats.py` CSV writing so mixed method schemas, including cross-encoder metadata fields, are handled correctly.
+- Fixed `v040_baselines_ablation_stats.py` CSV writing so mixed method schemas,
+  including cross-encoder metadata fields, are handled correctly.
+
+## ccge-la-alpha-v0.1 - 2026-05-21
+
+- Added public alpha API exports: `CCGELowAmplitudeEditor`, `CCGEConfig`,
+  `CCGEFeatureBatch`, `build_ccge_features`,
+  `multi_positive_retrieval_loss`, and `rank_candidates`.
+- Added `ConvMemory.attach_ccge_editor` and `ConvMemory.load_ccge_editor`.
+- Added `editor=` and `ccge_top_n=` parameters to `rerank`, `retrieve`,
+  `expand_context`, `rerank_embeddings`, and `expand_context_embeddings`.
+  They are disabled by default and preserve prior behavior unless explicitly
+  enabled.
+- Added `load_ccge` to `ConvMemory.from_pretrained`.
+- Published the alpha LoCoMo/MPNet seed-23 editor checkpoint with SHA256
+  `459ecfb2b4c35887f1d8f2cdd87dab402c37bd8dee86628655eff08f314b2e7c`.
+- Marked the CCGE-LA release as alpha: the interface may receive small changes,
+  and the checkpoint is a single seed-23 point.
 
 ## 0.3.0
 

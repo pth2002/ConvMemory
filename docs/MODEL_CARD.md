@@ -100,8 +100,8 @@ Canonical audited summary:
 - `results/v051/temporal_attribution_5seed/REPORT.md`
 
 Note: v0.40-v0.51 are internal evaluation-iteration identifiers for hardening
-experiments, not packaged PyPI releases. The installable package version remains
-0.3.0 and the public checkpoint is unchanged.
+experiments, not packaged PyPI releases. As of package version 0.4.0, the public
+base checkpoint is unchanged.
 
 Hardened result summary:
 

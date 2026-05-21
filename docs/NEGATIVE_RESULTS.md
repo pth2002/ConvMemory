@@ -16,8 +16,8 @@ Authoritative local artifacts:
 - `EXPERIMENT_LOG.md`
 
 Version labels such as v0.50 and v0.51 are internal evaluation-iteration
-identifiers, not packaged PyPI releases. The installable package version remains
-0.3.0 and the public checkpoint is unchanged.
+identifiers, not packaged PyPI releases. As of package version 0.4.0, the public
+base checkpoint is unchanged.
 
 ## v0.50: Tuned Heuristic Gate
 

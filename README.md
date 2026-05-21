@@ -18,7 +18,7 @@ reranker. Its intended use is recall-oriented memory selection for structured
 memory streams: conversations, user histories, agent traces, task logs, and
 session-level notes.
 
-Current package version: `0.3.0`
+Current package version: `0.4.0`
 
 ## When To Use It
 
@@ -49,6 +49,12 @@ available in `convmemory.ccge`; the alpha editor checkpoint is published on
 Hugging Face Hub for opt-in use.
 
 ## Installation
+
+```bash
+pip install convmemory
+```
+
+For development from source:
 
 ```bash
 git clone https://github.com/pth2002/ConvMemory.git
@@ -257,8 +263,8 @@ for the public evaluation protocol, training notes, model card, and negative
 results write-up.
 
 Note: v0.40-v0.51 are internal evaluation-iteration identifiers for hardening
-experiments, not packaged PyPI releases. The installable package version remains
-0.3.0 and the public checkpoint is unchanged.
+experiments, not packaged PyPI releases. The installable package version is
+0.4.0 and the public base checkpoint is unchanged.
 
 Important scope notes:
 

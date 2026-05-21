@@ -6,9 +6,8 @@ release is explicitly approved.
 ## Pre-Release Checklist
 
 - Run `pytest tests/ -q` and confirm the suite is green.
-- Finalize the `CHANGELOG.md` Unreleased section into a concrete version section,
-  for example `## 0.4.0 - YYYY-MM-DD`.
-- Bump `pyproject.toml` from the current `0.3.0` version to the release version.
+- Finalize the `CHANGELOG.md` Unreleased section into a concrete version section.
+- Bump `pyproject.toml` to the release version.
 - Confirm examples and docs do not reference private paths, API keys, local
   caches, or unpublished experiment logs.
 
@@ -31,12 +30,12 @@ twine upload dist/*
 ## Tag
 
 ```bash
-git tag v0.4.0
+git tag vX.Y.Z
 git push --tags
 ```
 
 ## Notes
 
-The current `0.3.0` package is the historical alpha package. The next package
-release is expected to be `0.4.0`, because it adds the CCGE-LA public alpha API,
-tests, CI, pinned dependency floors, and API hygiene.
+The `0.4.0` package is the first beta release. It adds the CCGE-LA public alpha
+API, tests, CI, pinned dependency floors, Hugging Face Hub checkpoint loading,
+and API hygiene.
