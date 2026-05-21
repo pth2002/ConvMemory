@@ -184,13 +184,11 @@ These are retrieval-stage evaluations. They measure whether annotated evidence
 memories are retrieved into the top-k list; they do not measure final answer
 generation.
 
-Authoritative result source:
-
-- `remote_results_archive/2026-05-16_v047_v048/results/v047/V047_SUMMARY_REGENERATED.md`
-- The old remote `results/v047/V047_SUMMARY.md` is deprecated because it was a
-  broken `tabulate` import stub.
-- `results/v050/tuned_heuristic_fusion_full/REPORT.md`
-- `results/v051/temporal_attribution_5seed/REPORT.md`
+The tables below are summarized from internal evaluation artifacts. Large
+per-question CSV files, embedding caches, teacher caches, and checkpoints are
+intentionally excluded from the public Git history. See the `docs/` directory
+for the public evaluation protocol, training notes, model card, and negative
+results write-up.
 
 Note: v0.40-v0.51 are internal evaluation-iteration identifiers for hardening
 experiments, not packaged PyPI releases. The installable package version remains
@@ -246,11 +244,11 @@ Five split seeds: 7, 11, 23, 31, 47. Candidate pool: raw dense top500.
 
 | Reranker | Recall@10 | Hit@10 | MRR |
 |---|---:|---:|---:|
-| ConvMemory (v0.40 5-seed) | 0.7798 ± 0.0074 | not reported | 0.5824 |
-| BGE-reranker-base | 0.6967 ± 0.0126 | 0.7469 ± 0.0144 | 0.5469 ± 0.0140 |
-| Jina-reranker-v2-base-multilingual | 0.7411 ± 0.0103 | 0.7924 ± 0.0083 | 0.5754 ± 0.0074 |
-| BGE-reranker-large | 0.7621 ± 0.0155 | 0.8124 ± 0.0135 | 0.6120 ± 0.0144 |
-| mxbai-rerank-large-v1 | 0.8080 ± 0.0153 | 0.8486 ± 0.0108 | 0.6687 ± 0.0093 |
+| ConvMemory (v0.40 5-seed) | 0.7798 +/- 0.0074 | not reported | 0.5824 |
+| BGE-reranker-base | 0.6967 +/- 0.0126 | 0.7469 +/- 0.0144 | 0.5469 +/- 0.0140 |
+| Jina-reranker-v2-base-multilingual | 0.7411 +/- 0.0103 | 0.7924 +/- 0.0083 | 0.5754 +/- 0.0074 |
+| BGE-reranker-large | 0.7621 +/- 0.0155 | 0.8124 +/- 0.0135 | 0.6120 +/- 0.0144 |
+| mxbai-rerank-large-v1 | 0.8080 +/- 0.0153 | 0.8486 +/- 0.0108 | 0.6687 +/- 0.0093 |
 
 Reading: ConvMemory is competitive on recall, but it should not be given an
 overall cross-encoder superiority claim. `mxbai-rerank-large-v1` is stronger on
@@ -263,11 +261,11 @@ feature masks.
 
 | Variant | Recall@10 | MRR | Delta R@10 vs full |
 |---|---:|---:|---:|
-| full_control | 0.7474 ± 0.0229 | 0.5343 ± 0.0160 | 0.0000 |
-| no_router | 0.7491 ± 0.0213 | 0.5391 ± 0.0137 | +0.0017 ± 0.0020 |
-| no_temporal_w1 | 0.7121 ± 0.0232 | 0.5305 ± 0.0148 | -0.0353 ± 0.0052 |
-| no_lexical | 0.6584 ± 0.0185 | 0.4367 ± 0.0129 | -0.0890 ± 0.0061 |
-| no_lexical_no_router | 0.6574 ± 0.0163 | 0.4342 ± 0.0127 | -0.0899 ± 0.0087 |
+| full_control | 0.7474 +/- 0.0229 | 0.5343 +/- 0.0160 | 0.0000 |
+| no_router | 0.7491 +/- 0.0213 | 0.5391 +/- 0.0137 | +0.0017 +/- 0.0020 |
+| no_temporal_w1 | 0.7121 +/- 0.0232 | 0.5305 +/- 0.0148 | -0.0353 +/- 0.0052 |
+| no_lexical | 0.6584 +/- 0.0185 | 0.4367 +/- 0.0129 | -0.0890 +/- 0.0061 |
+| no_lexical_no_router | 0.6574 +/- 0.0163 | 0.4342 +/- 0.0127 | -0.0899 +/- 0.0087 |
 
 Reading: lexical interaction features are the largest contributor. The
 no-temporal variant is weaker than the full model in this three-seed ablation,
@@ -326,8 +324,8 @@ Three split seeds. ConvMemory is retrained in each embedding space.
 
 | Backbone | Raw Recall@10 | ConvMemory Recall@10 | Gain | ConvMemory MRR |
 |---|---:|---:|---:|---:|
-| BGE-large | 0.6680 ± 0.0237 | 0.7726 ± 0.0100 | +0.1046 ± 0.0137 | 0.5639 ± 0.0066 |
-| E5-large | 0.7010 ± 0.0216 | 0.7902 ± 0.0171 | +0.0892 ± 0.0052 | 0.5941 ± 0.0103 |
+| BGE-large | 0.6680 +/- 0.0237 | 0.7726 +/- 0.0100 | +0.1046 +/- 0.0137 | 0.5639 +/- 0.0066 |
+| E5-large | 0.7010 +/- 0.0216 | 0.7902 +/- 0.0171 | +0.0892 +/- 0.0052 | 0.5941 +/- 0.0103 |
 
 Reading: ConvMemory gains are not just an artifact of a weak MPNet retriever.
 Retraining on stronger embeddings still gives about +9 to +10 Recall@10 points.
@@ -389,6 +387,19 @@ Research-preview code:
 - cascade fusion with cross-encoder scoring;
 - stronger cross-encoder comparison scripts;
 - generic JSONL adapters for external memory-retrieval datasets.
+
+Not included in the public package:
+
+- raw datasets, checkpoints, embedding caches, teacher caches, and full
+  per-question result CSVs;
+- local experiment logs and remote execution archives;
+- exploratory numbered experiment prototypes unless they are explicitly promoted
+  into the documented public API.
+
+Conflict-aware ConvMemory editors, including candidate-set conflict-state
+editing for stale/current memory conflicts, are an active research direction.
+They should be treated as research prototypes until they are packaged behind a
+stable API and documented with reproducible public commands.
 
 ## License
 

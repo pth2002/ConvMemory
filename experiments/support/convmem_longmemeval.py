@@ -80,6 +80,8 @@ def load_longmemeval(path, limit=None, skip_abstention=True):
 
 
 def make_windows(num_items, window_size=5, stride=2):
+    if window_size <= 1:
+        return [[i] for i in range(num_items)]
     windows = []
     for start in range(0, num_items, stride):
         end = min(start + window_size, num_items)

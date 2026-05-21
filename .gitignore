@@ -12,18 +12,33 @@ data/*.json
 
 results/
 pulled_results/
+remote_results_archive/
 figures/
 checkpoints/
 
 *.sqlite
+*.db
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.parquet
 *.pt
 *.pth
 *.bin
 *.safetensors
 *.out
+*.log
 *.docx
+*.jsonl
 
 .env
+.env.*
+*.key
+*api*key*.txt
+*API*key*.txt
+secrets/
+local_secrets/
 .venv/
 venv/
 
@@ -37,6 +52,9 @@ README_experiment.md
 REPORT.md
 RESULTS.md
 DATASETS.md
+EXPERIMENT_LOG.md
+RESEARCH_SPEC_*.md
+V*_SUMMARY.md
 analyze_*.py
 plot_*.py
 summarize_*.py
@@ -46,6 +64,11 @@ download_*.ps1
 convmem_chain_policy.py
 convmem_experiment.py
 convmem_locomo_distill.py
+
+# Local numbered experiment prototypes are noisy research artifacts. Tracked
+# public baselines remain tracked; new numbered scripts require an explicit
+# force-add after review.
+experiments/v*.py
 
 # Keep the checkpoint folder documented without committing model weights.
 !checkpoints/

@@ -88,6 +88,7 @@ def main():
     parser.add_argument("--embedding-cache", default=None)
     parser.add_argument("--cross-encoder-model", default="cross-encoder/ms-marco-MiniLM-L-6-v2")
     parser.add_argument("--cross-batch-size", type=int, default=32)
+    parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--raw-top-ns", default="50,100,200")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--out", default="results/locomo/crossencoder_mpnet_test")
@@ -109,6 +110,7 @@ def main():
     cross_encoder = CrossEncoder(
         resolve_local_model_path(args.cross_encoder_model),
         device=device,
+        trust_remote_code=args.trust_remote_code,
     )
     raw_top_ns = [int(x.strip()) for x in args.raw_top_ns.split(",") if x.strip()]
 
@@ -140,7 +142,7 @@ def main():
 
         if idx % 100 == 0:
             elapsed = time.perf_counter() - start
-            print(f"processed {idx}/{len(examples)} questions, elapsed={elapsed:.1f}s")
+            print(f"processed {idx}/{len(examples)} questions, elapsed={elapsed:.1f}s", flush=True)
 
     out_dir = Path(__file__).parent / args.out
     summary = summarize(rows)
@@ -148,23 +150,24 @@ def main():
     write_csv(out_dir / "crossencoder_summary_results.csv", summary)
 
     elapsed = time.perf_counter() - start
-    print("\nLoCoMo cross-encoder baseline")
-    print(f"split: {args.split}")
-    print(f"questions: {len(examples)}")
-    print(f"device: {device}")
-    print(f"encoder: {args.encoder_model}")
-    print(f"cross encoder: {args.cross_encoder_model}")
-    print(f"latency: {1000 * elapsed / max(1, len(examples)):.2f}ms/query")
-    print("\nmethod                         questions recall@10 hit@10 mrr")
+    print("\nLoCoMo cross-encoder baseline", flush=True)
+    print(f"split: {args.split}", flush=True)
+    print(f"questions: {len(examples)}", flush=True)
+    print(f"device: {device}", flush=True)
+    print(f"encoder: {args.encoder_model}", flush=True)
+    print(f"cross encoder: {args.cross_encoder_model}", flush=True)
+    print(f"latency: {1000 * elapsed / max(1, len(examples)):.2f}ms/query", flush=True)
+    print("\nmethod                         questions recall@10 hit@10 mrr", flush=True)
     for row in summary:
         print(
             f"{row['method']:<30} "
             f"{row['questions']:<9} "
             f"{row['recall_at_10']:.3f}     "
             f"{row['hit_at_10']:.3f}  "
-            f"{row['mrr']:.3f}"
+            f"{row['mrr']:.3f}",
+            flush=True,
         )
-    print(f"\nSaved: {out_dir / 'crossencoder_summary_results.csv'}")
+    print(f"\nSaved: {out_dir / 'crossencoder_summary_results.csv'}", flush=True)
 
 
 if __name__ == "__main__":

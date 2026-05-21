@@ -32,6 +32,26 @@ from experiments.support.convmem_longmemeval import (
 from experiments.support.locomo_crossencoder_baseline import choose_split
 
 
+def prepare_with_prefixes(example, encoder, window_size, stride, query_prefix="", passage_prefix=""):
+    if not query_prefix and not passage_prefix:
+        return prepare_encoded_example(example, encoder, window_size, stride)
+
+    prefixed = {
+        **example,
+        "query": f"{query_prefix}{example['query']}",
+        "memories": [
+            {**memory, "text": f"{passage_prefix}{memory['text']}"}
+            for memory in example["memories"]
+        ],
+    }
+    item = prepare_encoded_example(prefixed, encoder, window_size, stride)
+    if item is None:
+        return None
+    item["query"] = example["query"]
+    item["memories"] = example["memories"]
+    return item
+
+
 def write_csv(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -88,6 +108,10 @@ def main():
     parser.add_argument("--test-limit", type=int, default=None)
     parser.add_argument("--encoder-batch-size", type=int, default=128)
     parser.add_argument("--cross-batch-size", type=int, default=128)
+    parser.add_argument("--query-prefix", default="")
+    parser.add_argument("--passage-prefix", default="")
+    parser.add_argument("--dca-router-block-size", type=int, default=32)
+    parser.add_argument("--disable-lexical-features", action="store_true")
     parser.add_argument("--out", default="results/reproduce_locomo")
     args = parser.parse_args()
 
@@ -114,8 +138,21 @@ def main():
     )
     cross_encoder = CrossEncoder(resolve_local_model_path(args.cross_encoder_model), device=device)
 
-    first = prepare_encoded_example(train_examples[0], encoder, args.window_size, args.stride)
+    first = prepare_with_prefixes(
+        train_examples[0],
+        encoder,
+        args.window_size,
+        args.stride,
+        args.query_prefix,
+        args.passage_prefix,
+    )
     dim = first["memory_embeddings"].shape[1]
+    lexical_features = not args.disable_lexical_features
+    extra_scalar_features = 0
+    if args.dca_router_block_size > 0:
+        extra_scalar_features += 1
+    if lexical_features:
+        extra_scalar_features += 4
     model = MixerConvMemoryEncoder(
         dim,
         window_size=args.window_size,
@@ -127,7 +164,7 @@ def main():
         output_gate_init=0.1,
         score_mode="cosine",
     ).to(device)
-    scorer = CELiteScorer(dim, hidden_dim=256, extra_scalar_features=5).to(device)
+    scorer = CELiteScorer(dim, hidden_dim=256, extra_scalar_features=extra_scalar_features).to(device)
     optimizer = torch.optim.AdamW(
         list(model.parameters()) + list(scorer.parameters()),
         lr=2e-4,
@@ -142,11 +179,13 @@ def main():
         scorer.train()
         losses = []
         for idx, example in enumerate(train_examples, start=1):
-            item = first if epoch == 0 and idx == 1 else prepare_encoded_example(
+            item = first if epoch == 0 and idx == 1 else prepare_with_prefixes(
                 example,
                 encoder,
                 args.window_size,
                 args.stride,
+                args.query_prefix,
+                args.passage_prefix,
             )
             teacher_indices, teacher_scores, _ = cached_teacher_turn_scores(
                 item,
@@ -172,8 +211,8 @@ def main():
                 score_mse_weight=0.0,
                 first_rank_weight=args.first_rank_weight,
                 first_rank_target=args.first_rank_target,
-                dca_router_block_size=32,
-                lexical_features=True,
+                dca_router_block_size=args.dca_router_block_size,
+                lexical_features=lexical_features,
             )
             losses.append(loss)
             if idx % 100 == 0:
@@ -194,8 +233,8 @@ def main():
             stride=args.stride,
             candidate_top_n=args.candidate_top_n,
             raw_weight=args.raw_weight,
-            dca_router_block_size=32,
-            lexical_features=True,
+            dca_router_block_size=args.dca_router_block_size,
+            lexical_features=lexical_features,
         ),
         device=device,
     )
@@ -214,7 +253,7 @@ def main():
                 "hidden_dim": 256,
                 "token_mlp_dim": 32,
                 "channel_mlp_dim": 512,
-                "extra_scalar_features": 5,
+                "extra_scalar_features": extra_scalar_features,
             },
         )
         package.save_pretrained(args.save_pretrained)
@@ -229,7 +268,14 @@ def main():
     model.eval()
     scorer.eval()
     for eval_idx, example in enumerate(test_examples, start=1):
-        item = prepare_encoded_example(example, encoder, args.window_size, args.stride)
+        item = prepare_with_prefixes(
+            example,
+            encoder,
+            args.window_size,
+            args.stride,
+            args.query_prefix,
+            args.passage_prefix,
+        )
         raw_scores = item["memory_embeddings"] @ item["query_embedding"]
         raw_order = np.argsort(-raw_scores)
         raw_ranked = [item["memory_ids"][int(i)] for i in raw_order]
@@ -284,6 +330,10 @@ def main():
 
     print("\nConvMemory reproducibility run")
     print(f"device: {device}")
+    print(f"window size: {args.window_size}")
+    print(f"dca router block size: {args.dca_router_block_size}")
+    print(f"lexical features: {lexical_features}")
+    print(f"extra scalar features: {extra_scalar_features}")
     print(f"train questions: {len(train_examples)}")
     print(f"test questions: {len(test_examples)}")
     print(f"train time: {train_time:.1f}s")
