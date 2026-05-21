@@ -32,7 +32,7 @@ FEATURE_NAMES = [
     "sim_to_base_top",
     "sim_to_dense_top",
     "semantic_density_top16",
-    "overlap_to_top",
+    "token_overlap_to_top",
     "newer_than_base_top",
     "older_than_base_top",
     "abs_pos_gap_top_z",
@@ -113,6 +113,18 @@ def query_overlap_scores(query: str, candidate_texts: Sequence[str]) -> np.ndarr
     return np.asarray(values, dtype=np.float32)
 
 
+def token_overlap_to_text(candidate_texts: Sequence[str], top_index: int) -> np.ndarray:
+    """Token overlap between each candidate and the selected top candidate."""
+
+    top_set, _ = lexical_signature(str(candidate_texts[int(top_index)]))
+    values = []
+    for text in candidate_texts:
+        memory_set, _ = lexical_signature(str(text))
+        union = top_set | memory_set
+        values.append(len(top_set & memory_set) / max(1, len(union)))
+    return np.asarray(values, dtype=np.float32)
+
+
 def build_ccge_features(
     *,
     candidate_ids: Sequence[str],
@@ -161,6 +173,10 @@ def build_ccge_features(
     sim_to_base_top = emb @ emb[top_base]
     sim_to_dense_top = emb @ emb[top_dense]
     density = (emb @ emb[topk].T).mean(axis=1) if len(topk) else np.zeros(n, dtype=np.float32)
+    if candidate_texts is not None:
+        overlap_to_top = token_overlap_to_text(candidate_texts, top_base)
+    else:
+        overlap_to_top = np.full(n, float(overlap[top_base]), dtype=np.float32)
     pos_gap = np.abs(pos - pos[top_base])
 
     sorted_base_z = np.sort(zscore(base))[::-1]
@@ -186,7 +202,7 @@ def build_ccge_features(
             sim_to_base_top.astype(np.float32),
             sim_to_dense_top.astype(np.float32),
             density.astype(np.float32),
-            np.full(n, top_overlap, dtype=np.float32),
+            overlap_to_top.astype(np.float32),
             (pos > pos[top_base]).astype(np.float32),
             (pos < pos[top_base]).astype(np.float32),
             zscore(pos_gap),
@@ -359,4 +375,5 @@ __all__ = [
     "multi_positive_retrieval_loss",
     "query_overlap_scores",
     "rank_candidates",
+    "token_overlap_to_text",
 ]

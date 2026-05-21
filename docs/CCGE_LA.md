@@ -33,6 +33,7 @@ CCGE-LA targets this failure mode by reading the whole candidate set. It looks
 for signs such as:
 
 - semantically similar candidates at different time/order positions;
+- text overlap between the top ConvMemory candidate and nearby alternatives;
 - narrow score margins at the top of the list;
 - high candidate-set entropy;
 - dense clusters of memories around the same topic;
@@ -96,6 +97,28 @@ model.attach_ccge_editor(CCGELowAmplitudeEditor())
 
 That creates a randomly initialized editor. It verifies the API path, but it is
 not a useful retrieval model until trained.
+
+## Alpha Checkpoint
+
+An alpha LoCoMo/MPNet checkpoint is available as a GitHub release asset:
+
+[Download `convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip`](https://github.com/pth2002/ConvMemory/releases/download/ccge-la-alpha-v0.1/convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip)
+
+SHA256:
+`459ecfb2b4c35887f1d8f2cdd87dab402c37bd8dee86628655eff08f314b2e7c`.
+
+It was trained on the seed-23 LoCoMo-style split over ConvMemory candidate
+caches. The checkpoint is for API trials and early integration; it should not be
+treated as a final benchmark release.
+
+Seed-23 test metrics in the release manifest:
+
+| subset | ConvMemory MRR | CCGE-LA alpha MRR | CCGE-LA R@10 |
+|---|---:|---:|---:|
+| FULL | 0.5501 | 0.5638 | 0.7725 |
+| T_SUP_auto | 0.5424 | 0.5508 | 0.7138 |
+| CONV_TOP1_WRONG_GOLD_IN_POOL | 0.2468 | 0.2994 | 0.6822 |
+| RESCUABLE_STALE_TOP1 | 0.2470 | 0.3093 | 0.6877 |
 
 ## Training Signal
 

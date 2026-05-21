@@ -96,6 +96,30 @@ python examples/load_pretrained.py
 The same checkpoint is used by the current package. Newer package versions add
 library and evaluation utilities; they do not require a new weight file.
 
+### Optional CCGE-LA Alpha Checkpoint
+
+The CCGE-LA conflict editor has a separate alpha checkpoint:
+
+[Download `convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip`](https://github.com/pth2002/ConvMemory/releases/download/ccge-la-alpha-v0.1/convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip)
+
+Extract it from the repository root:
+
+```bash
+unzip convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip -d checkpoints
+```
+
+Then attach it after loading the base ConvMemory checkpoint:
+
+```python
+model = ConvMemory.from_pretrained("checkpoints/convmemory-locomo-mpnet")
+model.load_ccge_editor("checkpoints/convmemory-ccge-la-locomo-mpnet-seed23-alpha")
+```
+
+This is an alpha LoCoMo/MPNet editor trained on the seed-23 split. It is useful
+for trying the public CCGE-LA API, but it is not yet the default checkpoint.
+SHA256:
+`459ecfb2b4c35887f1d8f2cdd87dab402c37bd8dee86628655eff08f314b2e7c`.
+
 ## Quick Start
 
 ```python

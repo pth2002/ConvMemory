@@ -14,6 +14,7 @@ from convmemory.ccge import (
     multi_positive_retrieval_loss,
     query_overlap_scores,
     rank_candidates,
+    token_overlap_to_text,
 )
 
 
@@ -32,4 +33,5 @@ __all__ = [
     "multi_positive_retrieval_loss",
     "query_overlap_scores",
     "rank_candidates",
+    "token_overlap_to_text",
 ]
