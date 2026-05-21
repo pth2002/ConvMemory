@@ -77,8 +77,8 @@ Minimal usage:
 ```python
 from convmemory import CCGELowAmplitudeEditor, ConvMemory
 
-model = ConvMemory.from_pretrained("checkpoints/convmemory-locomo-mpnet")
-model.load_ccge_editor("checkpoints/my-ccge-la/ccge_la.pt")
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+model.load_ccge_editor("Purdy0228/ConvMemory-CCGE-LA")
 
 results = model.retrieve(
     query="What is the user's current hiking plan?",
@@ -100,7 +100,20 @@ not a useful retrieval model until trained.
 
 ## Alpha Checkpoint
 
-An alpha LoCoMo/MPNet checkpoint is available as a GitHub release asset:
+An alpha LoCoMo/MPNet checkpoint is available from Hugging Face Hub:
+
+[Purdy0228/ConvMemory-CCGE-LA](https://huggingface.co/Purdy0228/ConvMemory-CCGE-LA)
+
+It is intended to be attached to the matching base ConvMemory checkpoint:
+
+[Purdy0228/ConvMemory-LoCoMo-MPNet](https://huggingface.co/Purdy0228/ConvMemory-LoCoMo-MPNet)
+
+```python
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+model.load_ccge_editor("Purdy0228/ConvMemory-CCGE-LA")
+```
+
+The same editor checkpoint is also available as a GitHub release asset:
 
 [Download `convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip`](https://github.com/pth2002/ConvMemory/releases/download/ccge-la-alpha-v0.1/convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip)
 
@@ -218,7 +231,6 @@ reranker. For maximum accuracy, a cross-encoder can still be used after it.
 CCGE-LA is a public alpha API. Before it becomes a stable default feature, it
 still needs:
 
-- a packaged checkpoint;
 - an end-to-end reproducible public training/evaluation command;
 - same-split comparisons against raw dense retrieval, ConvMemory, and a strong
   cross-encoder.

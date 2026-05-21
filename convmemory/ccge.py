@@ -19,6 +19,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .hub import resolve_checkpoint_path
 from .scoring import lexical_signature
 
 
@@ -341,9 +342,9 @@ class CCGELowAmplitudeEditor(nn.Module):
         device: str | torch.device = "cpu",
         strict: bool = True,
     ) -> "CCGELowAmplitudeEditor":
-        """Load a CCGE-LA editor checkpoint."""
+        """Load a CCGE-LA editor checkpoint from disk or Hugging Face Hub."""
 
-        path = Path(path)
+        path = resolve_checkpoint_path(path)
         source = path / "ccge_la.pt" if path.is_dir() else path
         payload = torch.load(source, map_location="cpu")
         config = payload.get("config", {})

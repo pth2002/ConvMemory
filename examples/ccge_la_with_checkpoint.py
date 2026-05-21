@@ -1,10 +1,8 @@
 """Run CCGE-LA with real checkpoints on a small stale/current scenario.
 
-This is a checkpoint demonstration, not a smoke test. Download and extract both
-the base ConvMemory checkpoint and the CCGE-LA alpha checkpoint before running:
-
-- checkpoints/convmemory-locomo-mpnet/
-- checkpoints/convmemory-ccge-la-locomo-mpnet-seed23-alpha/
+This is a checkpoint demonstration, not a smoke test. By default it loads the
+public Hugging Face Hub checkpoints. If local checkpoint folders exist under
+``checkpoints/``, those are used instead.
 """
 
 from pathlib import Path
@@ -15,6 +13,8 @@ from convmemory import ConvMemory
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "checkpoints" / "convmemory-locomo-mpnet"
 CCGE = ROOT / "checkpoints" / "convmemory-ccge-la-locomo-mpnet-seed23-alpha"
+BASE_HUB = "Purdy0228/ConvMemory-LoCoMo-MPNet"
+CCGE_HUB = "Purdy0228/ConvMemory-CCGE-LA"
 
 
 def print_ranking(title, results):
@@ -24,17 +24,13 @@ def print_ranking(title, results):
 
 
 def main():
-    if not BASE.exists():
-        print(f"Missing base checkpoint: {BASE}")
-        print("Download convmemory-locomo-mpnet.zip from the GitHub release page.")
-        return
-    if not CCGE.exists():
-        print(f"Missing CCGE-LA checkpoint: {CCGE}")
-        print("Download convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip first.")
-        return
+    base = BASE if BASE.exists() else BASE_HUB
+    ccge = CCGE if CCGE.exists() else CCGE_HUB
 
-    model = ConvMemory.from_pretrained(BASE)
-    model.load_ccge_editor(CCGE)
+    print(f"Loading ConvMemory from {base}")
+    print(f"Loading CCGE-LA from {ccge}")
+    model = ConvMemory.from_pretrained(base)
+    model.load_ccge_editor(ccge)
 
     memories = [
         {

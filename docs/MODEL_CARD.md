@@ -2,6 +2,14 @@
 
 This model card covers the public `convmemory-locomo-mpnet` checkpoint.
 
+Hub repo: [Purdy0228/ConvMemory-LoCoMo-MPNet](https://huggingface.co/Purdy0228/ConvMemory-LoCoMo-MPNet)
+
+```python
+from convmemory import ConvMemory
+
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+```
+
 ## Model Summary
 
 - Model type: lightweight learned memory reranker.

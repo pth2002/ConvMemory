@@ -18,6 +18,14 @@
 
 ## Unreleased
 
+- Added Hugging Face Hub checkpoint loading for `ConvMemory.from_pretrained`
+  and `ConvMemory.load_ccge_editor`; Hub repo ids such as
+  `Purdy0228/ConvMemory-LoCoMo-MPNet` now resolve through
+  `huggingface_hub.snapshot_download` when no local path exists.
+- Added the optional `convmemory.hub` resolver, `hub` extra, and tests that mock
+  Hub downloads without network access.
+- Published the base LoCoMo/MPNet ConvMemory checkpoint on Hugging Face Hub:
+  `Purdy0228/ConvMemory-LoCoMo-MPNet`.
 - Added `tests/` smoke suite and `.github/workflows/ci.yml`, so the README CI
   badge now points to a real workflow.
 - Added `docs/RELEASE.md` with packaging and release instructions.

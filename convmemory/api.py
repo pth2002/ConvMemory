@@ -8,6 +8,7 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 from .ccge import CCGELowAmplitudeEditor, build_ccge_features
+from .hub import resolve_checkpoint_path
 from .models import build_default_components
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .scoring import cosine_scores, lexical_signature
@@ -105,15 +106,17 @@ class ConvMemory:
         embedding_model=None,
         load_ccge: bool = False,
     ):
-        """Load a ConvMemory checkpoint from disk.
+        """Load a ConvMemory checkpoint from disk or Hugging Face Hub.
 
         `embedding_model` may be `None` to use checkpoint metadata, a string to
         override the encoder, or `False` to skip encoder loading for precomputed
         embeddings. `load_ccge=True` auto-attaches `ccge_la.pt` when present;
-        the default is `False` so CCGE-LA remains explicit opt-in.
+        the default is `False` so CCGE-LA remains explicit opt-in. If `path`
+        does not exist and looks like `namespace/repo`, it is downloaded through
+        `huggingface_hub.snapshot_download`.
         """
 
-        path = Path(path)
+        path = resolve_checkpoint_path(path)
         metadata = json.loads((path / "config.json").read_text(encoding="utf-8"))
         rerank_config = RerankConfig(**metadata["rerank_config"])
         model_config = metadata["model_config"]
@@ -203,6 +206,7 @@ class ConvMemory:
     def load_ccge_editor(self, path, strict: bool = True):
         """Load and attach a CCGE-LA editor checkpoint.
 
+        `path` may be a local checkpoint path or a Hugging Face Hub repo id.
         Returns `self`. `strict` is forwarded to the editor state-dict loader;
         mismatched embedding backbone metadata emits the same warning as
         `attach_ccge_editor`.

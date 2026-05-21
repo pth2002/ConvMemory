@@ -31,6 +31,9 @@ dependencies = [
     "scikit-learn>=1.2",
 ]
 
+[project.optional-dependencies]
+hub = ["huggingface_hub>=0.20"]
+
 [project.urls]
 Homepage = "https://github.com/pth2002/ConvMemory"
 Issues = "https://github.com/pth2002/ConvMemory/issues"

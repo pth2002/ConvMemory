@@ -45,8 +45,8 @@ vector top500 -> ConvMemory candidate stage -> optional small cross-encoder -> m
 Public alpha: the CCGE-LA conflict editor can be inserted after ConvMemory to
 repair stale/current memory conflicts. See [CCGE-LA](docs/CCGE_LA.md) and the
 broader [research trajectory](docs/RESEARCH_TRAJECTORY.md). The API is
-available in `convmemory.ccge`; trained editor weights are not yet shipped as a
-public checkpoint.
+available in `convmemory.ccge`; the alpha editor checkpoint is published on
+Hugging Face Hub for opt-in use.
 
 ## Installation
 
@@ -59,9 +59,19 @@ pip install -r requirements.txt
 
 ConvMemory requires Python 3.10 or later.
 
-## Checkpoint
+## Checkpoints
 
-The public LoCoMo MPNet checkpoint is distributed as a GitHub release asset:
+The public LoCoMo MPNet checkpoint is available from Hugging Face Hub:
+
+[Purdy0228/ConvMemory-LoCoMo-MPNet](https://huggingface.co/Purdy0228/ConvMemory-LoCoMo-MPNet)
+
+```python
+from convmemory import ConvMemory
+
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+```
+
+The same checkpoint is also distributed as a GitHub release asset:
 
 [Download `convmemory-locomo-mpnet.zip`](https://github.com/pth2002/ConvMemory/releases/download/v0.1.0/convmemory-locomo-mpnet.zip)
 
@@ -98,7 +108,18 @@ library and evaluation utilities; they do not require a new weight file.
 
 ### Optional CCGE-LA Alpha Checkpoint
 
-The CCGE-LA conflict editor has a separate alpha checkpoint:
+The CCGE-LA conflict editor has a separate alpha checkpoint on Hugging Face Hub:
+
+[Purdy0228/ConvMemory-CCGE-LA](https://huggingface.co/Purdy0228/ConvMemory-CCGE-LA)
+
+Attach it after loading the base ConvMemory checkpoint:
+
+```python
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+model.load_ccge_editor("Purdy0228/ConvMemory-CCGE-LA")
+```
+
+The same editor is also distributed as a GitHub release asset:
 
 [Download `convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip`](https://github.com/pth2002/ConvMemory/releases/download/ccge-la-alpha-v0.1/convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip)
 
@@ -108,7 +129,7 @@ Extract it from the repository root:
 unzip convmemory-ccge-la-locomo-mpnet-seed23-alpha.zip -d checkpoints
 ```
 
-Then attach it after loading the base ConvMemory checkpoint:
+If using local files, attach it after loading the base ConvMemory checkpoint:
 
 ```python
 model = ConvMemory.from_pretrained("checkpoints/convmemory-locomo-mpnet")
@@ -126,7 +147,7 @@ SHA256:
 from convmemory import ConvMemory
 
 model = ConvMemory.from_pretrained(
-    "checkpoints/convmemory-locomo-mpnet",
+    "Purdy0228/ConvMemory-LoCoMo-MPNet",
     device="cuda",
 )
 
@@ -156,7 +177,7 @@ Most applications call ConvMemory after vector search:
 from convmemory import ConvMemory
 
 memory_reranker = ConvMemory.from_pretrained(
-    "checkpoints/convmemory-locomo-mpnet",
+    "Purdy0228/ConvMemory-LoCoMo-MPNet",
     device="cuda",
 )
 
@@ -209,7 +230,7 @@ To enable the CCGE-LA conflict editor after ConvMemory, attach a trained editor
 checkpoint and pass `editor="ccge_la"`:
 
 ```python
-memory_reranker.load_ccge_editor("checkpoints/my-ccge-la/ccge_la.pt")
+memory_reranker.load_ccge_editor("Purdy0228/ConvMemory-CCGE-LA")
 
 ranked = memory_reranker.retrieve(
     query=query,
@@ -455,7 +476,7 @@ Not included in the public package:
 
 CCGE-LA is packaged as a public alpha API for conflict-aware ConvMemory editing.
 It should still be treated as experimental until a public training recipe and
-checkpoint are released.
+same-split public evaluation command are released.
 
 ## License
 

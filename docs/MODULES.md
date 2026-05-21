@@ -167,5 +167,11 @@ The public API is:
 - `ConvMemory.load_ccge_editor`
 - `editor="ccge_la"` in `retrieve`, `rerank`, and `rerank_embeddings`
 
-The current repository exposes the API but does not ship trained CCGE-LA
-weights. Randomly initialized editors are useful only for smoke tests.
+The repository exposes the API and an opt-in alpha editor checkpoint:
+
+```python
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+model.load_ccge_editor("Purdy0228/ConvMemory-CCGE-LA")
+```
+
+Randomly initialized editors are useful only for smoke tests.
