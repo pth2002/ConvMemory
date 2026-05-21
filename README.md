@@ -318,6 +318,11 @@ adds value; the negative result is about why it works.
 See [docs/NEGATIVE_RESULTS.md](docs/NEGATIVE_RESULTS.md) for the full
 v0.50/v0.51 interpretation.
 
+For the later current/stale and conflict-editor research trajectory, see
+[docs/RESEARCH_TRAJECTORY.md](docs/RESEARCH_TRAJECTORY.md). That document
+summarizes the internal v0.60+ research line in a public-safe form without raw
+logs, private paths, caches, or exploratory scripts.
+
 ### Strong-Backbone Retraining
 
 Three split seeds. ConvMemory is retrained in each embedding space.
@@ -367,9 +372,9 @@ The current documentation reports the hardened v0.47/v0.51 audit. See:
 - [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
 - [docs/TRAINING.md](docs/TRAINING.md)
 
-Main evaluation artifacts were generated under versioned `results/v040` through
-`results/v051` directories. Large per-question CSV files, teacher caches, and
-checkpoints are intentionally kept out of the repository history.
+Main evaluation artifacts are kept outside the repository history. Large
+per-question CSV files, teacher caches, and checkpoints are intentionally not
+committed.
 
 ## Project Status
 
