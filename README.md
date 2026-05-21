@@ -42,6 +42,12 @@ The strongest current deployment pattern is a cascade:
 vector top500 -> ConvMemory candidate stage -> optional small cross-encoder -> memory context
 ```
 
+Research preview: conflict-aware candidate-set editors can be inserted after
+ConvMemory to repair stale/current memory conflicts. See
+[CCGE-LA](docs/CCGE_LA.md) and the broader
+[research trajectory](docs/RESEARCH_TRAJECTORY.md). This editor is not yet a
+stable public API or shipped checkpoint.
+
 ## Installation
 
 ```bash
@@ -391,6 +397,8 @@ Research-preview code:
 - context expansion policies for wider agent memory budgets;
 - cascade fusion with cross-encoder scoring;
 - stronger cross-encoder comparison scripts;
+- CCGE-LA conflict-aware candidate-set editing for stale/current memory
+  conflicts;
 - generic JSONL adapters for external memory-retrieval datasets.
 
 Not included in the public package:
