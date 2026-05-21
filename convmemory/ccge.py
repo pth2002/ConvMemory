@@ -243,6 +243,7 @@ class CCGELowAmplitudeEditor(nn.Module):
             gate_bias=float(gate_bias),
             residual_init=float(residual_init),
         )
+        self.trained_embedding_model_name = None
         self.in_proj = nn.Sequential(
             nn.Linear(feature_dim, model_dim),
             nn.GELU(),
@@ -308,6 +309,8 @@ class CCGELowAmplitudeEditor(nn.Module):
         return scores.detach().cpu().numpy()[0], float(gate.detach().cpu().numpy()[0])
 
     def save_pretrained(self, path: str | Path) -> None:
+        """Save a CCGE-LA editor checkpoint."""
+
         path = Path(path)
         if path.suffix:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -321,6 +324,11 @@ class CCGELowAmplitudeEditor(nn.Module):
                 "version": 1,
                 "config": asdict(self.config),
                 "state_dict": self.state_dict(),
+                "trained_embedding_model_name": getattr(
+                    self,
+                    "trained_embedding_model_name",
+                    None,
+                ),
             },
             target,
         )
@@ -333,6 +341,8 @@ class CCGELowAmplitudeEditor(nn.Module):
         device: str | torch.device = "cpu",
         strict: bool = True,
     ) -> "CCGELowAmplitudeEditor":
+        """Load a CCGE-LA editor checkpoint."""
+
         path = Path(path)
         source = path / "ccge_la.pt" if path.is_dir() else path
         payload = torch.load(source, map_location="cpu")
@@ -340,6 +350,7 @@ class CCGELowAmplitudeEditor(nn.Module):
         model = cls(**config)
         state_dict = payload.get("state_dict", payload)
         model.load_state_dict(state_dict, strict=strict)
+        model.trained_embedding_model_name = payload.get("trained_embedding_model_name")
         return model.to(device).eval()
 
 

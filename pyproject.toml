@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["memory", "retrieval", "reranking", "rag", "agents"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
@@ -23,12 +23,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "numpy",
-    "torch",
-    "sentence-transformers",
-    "transformers",
-    "tqdm",
-    "scikit-learn",
+    "numpy>=1.24",
+    "torch>=2.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.30",
+    "tqdm>=4.60",
+    "scikit-learn>=1.2",
 ]
 
 [project.urls]

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
+import warnings
 
 import numpy as np
 import torch
@@ -57,6 +58,13 @@ class ConvMemory:
         ccge_editor=None,
         **model_kwargs,
     ):
+        """Create a ConvMemory instance from dimensions and config.
+
+        This initializes random weights and is intended for development, tests,
+        or custom training code. Pass `embedding_model=None` to use only
+        precomputed embeddings, or a model name to attach a local encoder.
+        """
+
         rerank_config = config or RerankConfig()
         extra_scalar_features = model_kwargs.get("extra_scalar_features")
         if extra_scalar_features is None:
@@ -95,8 +103,16 @@ class ConvMemory:
         path,
         device="cpu",
         embedding_model=None,
-        load_ccge: bool = True,
+        load_ccge: bool = False,
     ):
+        """Load a ConvMemory checkpoint from disk.
+
+        `embedding_model` may be `None` to use checkpoint metadata, a string to
+        override the encoder, or `False` to skip encoder loading for precomputed
+        embeddings. `load_ccge=True` auto-attaches `ccge_la.pt` when present;
+        the default is `False` so CCGE-LA remains explicit opt-in.
+        """
+
         path = Path(path)
         metadata = json.loads((path / "config.json").read_text(encoding="utf-8"))
         rerank_config = RerankConfig(**metadata["rerank_config"])
@@ -120,7 +136,7 @@ class ConvMemory:
         if load_ccge and ccge_path.exists():
             ccge_editor = CCGELowAmplitudeEditor.from_pretrained(ccge_path, device=device)
 
-        return cls(
+        model = cls(
             conv_model=conv_model,
             scorer=scorer,
             config=rerank_config,
@@ -130,8 +146,13 @@ class ConvMemory:
             model_config=model_config,
             ccge_editor=ccge_editor,
         )
+        if ccge_editor is not None:
+            print(f"[ConvMemory] auto-attached CCGE-LA editor from {ccge_path}")
+        return model
 
     def save_pretrained(self, path):
+        """Save ConvMemory weights, config, and an attached CCGE-LA editor."""
+
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         metadata = {
@@ -156,24 +177,51 @@ class ConvMemory:
             self.ccge_editor.save_pretrained(path / "ccge_la.pt")
 
     def attach_ccge_editor(self, editor):
-        """Attach a trained CCGE-LA editor to this ConvMemory instance."""
+        """Attach a trained CCGE-LA editor to this ConvMemory instance.
+
+        Returns `self`. If both the ConvMemory checkpoint and editor declare
+        embedding backbone names and they differ, a `UserWarning` is emitted
+        because quality may degrade.
+        """
 
         if not isinstance(editor, CCGELowAmplitudeEditor):
             raise TypeError("editor must be a CCGELowAmplitudeEditor")
+        editor_backbone = getattr(editor, "trained_embedding_model_name", None)
+        if self.embedding_model_name and editor_backbone and self.embedding_model_name != editor_backbone:
+            warnings.warn(
+                "CCGE editor was trained on backbone "
+                f"{editor_backbone} but is being attached to ConvMemory with "
+                f"backbone {self.embedding_model_name}; quality may degrade.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if editor_backbone is None and self.embedding_model_name is not None:
+            editor.trained_embedding_model_name = self.embedding_model_name
         self.ccge_editor = editor.to(self.device).eval()
         return self
 
     def load_ccge_editor(self, path, strict: bool = True):
-        """Load and attach a CCGE-LA editor checkpoint."""
+        """Load and attach a CCGE-LA editor checkpoint.
 
-        self.ccge_editor = CCGELowAmplitudeEditor.from_pretrained(
+        Returns `self`. `strict` is forwarded to the editor state-dict loader;
+        mismatched embedding backbone metadata emits the same warning as
+        `attach_ccge_editor`.
+        """
+
+        editor = CCGELowAmplitudeEditor.from_pretrained(
             path,
             device=self.device,
             strict=strict,
         )
-        return self
+        return self.attach_ccge_editor(editor)
 
     def encode(self, texts):
+        """Encode texts with the attached sentence-transformer encoder.
+
+        Raises `ValueError` when no encoder is attached; use
+        `rerank_embeddings` for precomputed embeddings.
+        """
+
         if self.embedding_model is None:
             raise ValueError(
                 "No embedding model is attached. Pass embeddings directly with "
@@ -206,6 +254,14 @@ class ConvMemory:
         editor=None,
         ccge_top_n: Optional[int] = None,
     ):
+        """Rerank text memories and return `list[RerankResult]`.
+
+        Encodes `query` and `memories`, optionally restricts to `candidate_ids`,
+        and applies `editor="ccge_la"` or a `CCGELowAmplitudeEditor` instance
+        after ConvMemory. `ccge_top_n` limits how many top candidates are edited.
+        Raises `ValueError` for invalid editor or window-mode settings.
+        """
+
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
         query_embedding = embeddings[0]
@@ -246,11 +302,13 @@ class ConvMemory:
         editor=None,
         ccge_top_n: Optional[int] = None,
     ):
-        """Retrieve memories with a stable public mode switch.
+        """Retrieve memories and return `list[RerankResult]`.
 
         `mode="rerank"` returns the normal ConvMemory ranking.
         `mode="expand"` protects the strongest reranked memories, then fills the
-        remaining context budget with complementary candidates.
+        remaining context budget with complementary candidates. `editor` and
+        `ccge_top_n` are passed through to the scoring path. Raises `ValueError`
+        for unknown modes, policies, editors, or window modes.
         """
         selected_mode = mode.lower().strip()
         if selected_mode == "rerank":
@@ -298,12 +356,13 @@ class ConvMemory:
         editor=None,
         ccge_top_n: Optional[int] = None,
     ):
-        """Build a slightly wider memory context for an agent or LLM.
+        """Build a wider memory context and return `list[RerankResult]`.
 
         The first `protected_k` memories come from the main ConvMemory ranking.
         The remaining slots are filled from complementary rankings, which can
-        include raw dense retrieval, candidate-local window scoring, and optional
-        additional ConvMemory checkpoints passed as `expert_rankers`.
+        include raw dense retrieval, candidate-local window scoring, optional
+        expert rankers, and optional CCGE-LA editing via `editor`/`ccge_top_n`.
+        Raises `ValueError` for invalid expansion policies or editor settings.
         """
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
@@ -346,6 +405,14 @@ class ConvMemory:
         editor=None,
         ccge_top_n: Optional[int] = None,
     ):
+        """Rerank precomputed embeddings and return `list[RerankResult]`.
+
+        This is the no-encoder path for systems that already store embeddings.
+        `editor="ccge_la"` applies an attached CCGE-LA editor; `ccge_top_n`
+        limits the edited prefix. Raises `ValueError` for invalid editor or
+        window-mode settings.
+        """
+
         results = self.reranker.rerank_embeddings(
             query_embedding=query_embedding,
             memory_embeddings=memory_embeddings,
@@ -384,6 +451,14 @@ class ConvMemory:
         editor=None,
         ccge_top_n: Optional[int] = None,
     ):
+        """Expand context over precomputed embeddings.
+
+        Protects a ConvMemory prefix, fills the remaining budget from
+        complementary rankings, and optionally applies `editor="ccge_la"`.
+        Returns `list[RerankResult]`; raises `ValueError` for invalid policy,
+        editor, or window-mode arguments.
+        """
+
         if context_budget <= 0:
             return []
         protected_k = max(0, min(int(protected_k), int(context_budget)))
@@ -471,25 +546,21 @@ class ConvMemory:
         return self._rerank_with_new_positions(selected)
 
     def _resolve_editor(self, editor):
-        if editor is None or editor is False:
+        message = "editor must be None, 'ccge_la', or a CCGELowAmplitudeEditor instance"
+        if editor is None:
             return None
         if isinstance(editor, CCGELowAmplitudeEditor):
             return editor.to(self.device).eval()
-        if editor is True:
-            editor = "ccge_la"
         if isinstance(editor, str):
-            name = editor.lower().strip()
-            if name in {"", "none", "convmemory"}:
-                return None
-            if name not in {"ccge", "ccge_la", "ccge-la"}:
-                raise ValueError("editor must be None, 'ccge_la', or a CCGELowAmplitudeEditor")
+            if editor != "ccge_la":
+                raise ValueError(message)
             if self.ccge_editor is None:
                 raise ValueError(
                     "No CCGE-LA editor is attached. Call `load_ccge_editor(path)` "
                     "or `attach_ccge_editor(editor)` before using editor='ccge_la'."
                 )
             return self.ccge_editor
-        raise TypeError("editor must be None, a string, or a CCGELowAmplitudeEditor")
+        raise ValueError(message)
 
     def _maybe_apply_editor(
         self,

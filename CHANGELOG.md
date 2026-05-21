@@ -1,6 +1,40 @@
 # Changelog
 
+## ccge-la-alpha-v0.1 - 2026-05-21
+
+- Added public alpha API exports: `CCGELowAmplitudeEditor`, `CCGEConfig`,
+  `CCGEFeatureBatch`, `build_ccge_features`,
+  `multi_positive_retrieval_loss`, and `rank_candidates`.
+- Added `ConvMemory.attach_ccge_editor` and `ConvMemory.load_ccge_editor`.
+- Added `editor=` and `ccge_top_n=` parameters to `rerank`, `retrieve`,
+  `expand_context`, `rerank_embeddings`, and `expand_context_embeddings`.
+  They are disabled by default and preserve prior behavior unless explicitly
+  enabled.
+- Added `load_ccge` to `ConvMemory.from_pretrained`.
+- Published the alpha LoCoMo/MPNet seed-23 editor checkpoint with SHA256
+  `459ecfb2b4c35887f1d8f2cdd87dab402c37bd8dee86628655eff08f314b2e7c`.
+- Marked the CCGE-LA release as alpha: the interface may receive small changes,
+  and the checkpoint is a single seed-23 point.
+
 ## Unreleased
+
+- Added `tests/` smoke suite and `.github/workflows/ci.yml`, so the README CI
+  badge now points to a real workflow.
+- Added `docs/RELEASE.md` with packaging and release instructions.
+- Added `examples/ccge_la_with_checkpoint.py` as a real-checkpoint CCGE-LA
+  demonstration.
+- Added minimum dependency versions in `pyproject.toml` and `requirements.txt`.
+- Added a warning when attaching or loading a CCGE-LA editor trained for a
+  different embedding backbone.
+- Changed package classifier from `Development Status :: 3 - Alpha` to
+  `Development Status :: 4 - Beta`.
+- Changed, breaking for the alpha API only: `ConvMemory.from_pretrained`
+  `load_ccge` now defaults to `False` so CCGE-LA loading is explicit opt-in.
+- Changed, breaking for the alpha API only: `editor=` now accepts only `None`,
+  `"ccge_la"`, or a `CCGELowAmplitudeEditor` instance. Legacy spellings such as
+  `True`, `False`, `""`, `"none"`, `"convmemory"`, `"ccge"`, and `"ccge-la"`
+  now raise `ValueError`.
+- Documented public `ConvMemory` methods with API-focused docstrings.
 
 - Note: v0.40-v0.51 are internal evaluation-iteration identifiers for
   hardening experiments, not packaged PyPI releases. The installable package

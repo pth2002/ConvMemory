@@ -1,6 +1,6 @@
-numpy
-torch
-sentence-transformers
-transformers
-tqdm
-scikit-learn
+numpy>=1.24
+torch>=2.0
+sentence-transformers>=2.2.0
+transformers>=4.30
+tqdm>=4.60
+scikit-learn>=1.2
