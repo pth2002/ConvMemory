@@ -2,7 +2,7 @@
 
 ## Technical Report
 
-📄 [ConvMemory: A Lightweight Learned Memory Reranker, a Negative Attribution Result, and a Research-Preview Conflict Editor](paper/convmemory_report.pdf) (May 2026)
+[ConvMemory: A Lightweight Learned Memory Reranker, a Negative Attribution Result, and a Research-Preview Conflict Editor](paper/convmemory_report.pdf) (May 2026)
 
 **Headline finding**: The temporal-window mechanism originally claimed for ConvMemory is refuted by a 5-seed paired-bootstrap attribution study. The engineering value of the reranker (10-100× cheaper than cross-encoder baselines on conversational memory retrieval) survives the negative attribution.
 
