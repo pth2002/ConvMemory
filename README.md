@@ -258,6 +258,39 @@ ranked = memory_reranker.retrieve(
 The checkpoint and embeddings must use the same embedding model family and
 embedding dimension.
 
+### ConvMemory v2: Memory-MLA Expander (experimental)
+
+ConvMemory v2 is an opt-in prefix-protected recall expander. It is not a
+replacement for v1, and it is off by default: `retrieve(query, memories)` remains
+the pure v1 ConvMemory path.
+
+The expander runs after the base ConvMemory ranking. It preserves the top
+`protect_top_k` results exactly, then uses compressed memory latent codes to
+reorder a small suffix window for extra recall. The verified v320 configuration
+is `latent_count=12`, `code_dim=64`, `protect_top_k=7`, and
+`expand_window=16`. It mainly targets Recall@10 / hard-recall improvements; it
+does not claim SOTA.
+
+```python
+from convmemory import ConvMemory
+
+model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
+model.load_expander("path-or-hub-id-for-memory-mla")
+
+ranked = model.retrieve(
+    query=query,
+    memories=candidates,
+    expander="memory_mla",
+    protect_top_k=7,
+    expand_window=16,
+    top_k=20,
+)
+```
+
+The API is experimental and follows the CCGE-LA opt-in pattern. See
+[Memory-MLA](docs/MEMORY_MLA.md) for mechanism notes, training discipline, and
+the v320 verification numbers.
+
 ## Results
 
 These are retrieval-stage evaluations. They measure whether annotated evidence

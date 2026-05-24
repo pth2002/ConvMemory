@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 
 from .ccge import CCGELowAmplitudeEditor, build_ccge_features
 from .hub import resolve_checkpoint_path
+from .memory_mla import MemoryMLAExpander
 from .models import build_default_components
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .scoring import cosine_scores, lexical_signature
@@ -31,6 +32,7 @@ class ConvMemory:
         embedding_model_name=None,
         model_config=None,
         ccge_editor=None,
+        expander=None,
     ):
         self.device = device
         self.config = config or RerankConfig()
@@ -38,6 +40,7 @@ class ConvMemory:
         self.embedding_model = embedding_model
         self.model_config = model_config or {}
         self.ccge_editor = None
+        self.memory_mla_expander = None
         self.reranker = ConvMemoryReranker(
             conv_model=conv_model,
             scorer=scorer,
@@ -48,6 +51,8 @@ class ConvMemory:
         self.reranker.scorer.eval()
         if ccge_editor is not None:
             self.attach_ccge_editor(ccge_editor)
+        if expander is not None:
+            self.attach_expander(expander)
 
     @classmethod
     def from_config(
@@ -57,6 +62,7 @@ class ConvMemory:
         embedding_model=None,
         config=None,
         ccge_editor=None,
+        expander=None,
         **model_kwargs,
     ):
         """Create a ConvMemory instance from dimensions and config.
@@ -96,6 +102,7 @@ class ConvMemory:
             embedding_model_name=embedding_model,
             model_config=model_config,
             ccge_editor=ccge_editor,
+            expander=expander,
         )
 
     @classmethod
@@ -178,6 +185,8 @@ class ConvMemory:
         )
         if self.ccge_editor is not None:
             self.ccge_editor.save_pretrained(path / "ccge_la.pt")
+        if self.memory_mla_expander is not None:
+            self.memory_mla_expander.save_pretrained(path / "memory_mla.pt")
 
     def attach_ccge_editor(self, editor):
         """Attach a trained CCGE-LA editor to this ConvMemory instance.
@@ -219,6 +228,51 @@ class ConvMemory:
         )
         return self.attach_ccge_editor(editor)
 
+    def attach_expander(self, expander):
+        """Attach a trained Memory-MLA expander to this ConvMemory instance.
+
+        Returns `self`. If both the ConvMemory checkpoint and expander declare
+        embedding backbone names and they differ, a `UserWarning` is emitted
+        because quality may degrade.
+        """
+
+        if not isinstance(expander, MemoryMLAExpander):
+            raise TypeError("expander must be a MemoryMLAExpander")
+        expander_backbone = getattr(expander, "trained_embedding_model_name", None)
+        if (
+            self.embedding_model_name
+            and expander_backbone
+            and self.embedding_model_name != expander_backbone
+        ):
+            warnings.warn(
+                "Memory-MLA expander was trained on backbone "
+                f"{expander_backbone} but is being attached to ConvMemory with "
+                f"backbone {self.embedding_model_name}; quality may degrade.",
+                UserWarning,
+                stacklevel=2,
+            )
+        if expander_backbone is None and self.embedding_model_name is not None:
+            expander.trained_embedding_model_name = self.embedding_model_name
+        self.memory_mla_expander = expander.to(self.device).eval()
+        print("[ConvMemory] attached expander")
+        return self
+
+    def load_expander(self, path, strict: bool = True):
+        """Load and attach a Memory-MLA expander checkpoint.
+
+        `path` may be a local checkpoint path or a Hugging Face Hub repo id.
+        Returns `self`. `strict` is forwarded to the expander state-dict loader;
+        mismatched embedding backbone metadata emits the same warning as
+        `attach_expander`.
+        """
+
+        expander = MemoryMLAExpander.from_pretrained(
+            path,
+            device=self.device,
+            strict=strict,
+        )
+        return self.attach_expander(expander)
+
     def encode(self, texts):
         """Encode texts with the attached sentence-transformer encoder.
 
@@ -257,13 +311,19 @@ class ConvMemory:
         window_mode=None,
         editor=None,
         ccge_top_n: Optional[int] = None,
+        expander=None,
+        protect_top_k: int = 7,
+        expand_window: int = 16,
     ):
         """Rerank text memories and return `list[RerankResult]`.
 
         Encodes `query` and `memories`, optionally restricts to `candidate_ids`,
         and applies `editor="ccge_la"` or a `CCGELowAmplitudeEditor` instance
         after ConvMemory. `ccge_top_n` limits how many top candidates are edited.
-        Raises `ValueError` for invalid editor or window-mode settings.
+        `expander="memory_mla"` applies an attached Memory-MLA expander after
+        the base ranking; `protect_top_k` preserves the prefix and
+        `expand_window` controls the reordered suffix. Raises `ValueError` for
+        invalid editor, expander, or window-mode settings.
         """
 
         memory_ids, memory_texts = self._parse_memories(memories)
@@ -288,6 +348,9 @@ class ConvMemory:
             window_mode=window_mode,
             editor=editor,
             ccge_top_n=ccge_top_n,
+            expander=expander,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
         )
         return results[:top_k] if top_k is not None else results
 
@@ -305,14 +368,20 @@ class ConvMemory:
         window_mode=None,
         editor=None,
         ccge_top_n: Optional[int] = None,
+        expander=None,
+        protect_top_k: int = 7,
+        expand_window: int = 16,
     ):
         """Retrieve memories and return `list[RerankResult]`.
 
         `mode="rerank"` returns the normal ConvMemory ranking.
         `mode="expand"` protects the strongest reranked memories, then fills the
         remaining context budget with complementary candidates. `editor` and
-        `ccge_top_n` are passed through to the scoring path. Raises `ValueError`
-        for unknown modes, policies, editors, or window modes.
+        `ccge_top_n` are passed through to the scoring path. `expander` may be
+        `None`, `"memory_mla"`, or a `MemoryMLAExpander`; when enabled it is
+        applied after the base ConvMemory ranking with a protected prefix.
+        Raises `ValueError` for unknown modes, policies, editors, expanders, or
+        window modes.
         """
         selected_mode = mode.lower().strip()
         if selected_mode == "rerank":
@@ -324,6 +393,9 @@ class ConvMemory:
                 window_mode=window_mode,
                 editor=editor,
                 ccge_top_n=ccge_top_n,
+                expander=expander,
+                protect_top_k=protect_top_k,
+                expand_window=expand_window,
             )
         if selected_mode not in {"expand", "context", "expand_context"}:
             raise ValueError("mode must be either 'rerank' or 'expand'")
@@ -345,6 +417,9 @@ class ConvMemory:
             window_mode=window_mode,
             editor=editor,
             ccge_top_n=ccge_top_n,
+            expander=expander,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
         )
 
     def expand_context(
@@ -359,14 +434,19 @@ class ConvMemory:
         window_mode=None,
         editor=None,
         ccge_top_n: Optional[int] = None,
+        expander=None,
+        protect_top_k: int = 7,
+        expand_window: int = 16,
     ):
         """Build a wider memory context and return `list[RerankResult]`.
 
         The first `protected_k` memories come from the main ConvMemory ranking.
         The remaining slots are filled from complementary rankings, which can
         include raw dense retrieval, candidate-local window scoring, optional
-        expert rankers, and optional CCGE-LA editing via `editor`/`ccge_top_n`.
-        Raises `ValueError` for invalid expansion policies or editor settings.
+        expert rankers, optional CCGE-LA editing via `editor`/`ccge_top_n`, and
+        optional Memory-MLA suffix expansion via `expander`.
+        Raises `ValueError` for invalid expansion policies, editor settings, or
+        expander settings.
         """
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
@@ -394,6 +474,9 @@ class ConvMemory:
             window_mode=window_mode,
             editor=editor,
             ccge_top_n=ccge_top_n,
+            expander=expander,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
         )
 
     def rerank_embeddings(
@@ -408,12 +491,18 @@ class ConvMemory:
         window_mode=None,
         editor=None,
         ccge_top_n: Optional[int] = None,
+        expander=None,
+        protect_top_k: int = 7,
+        expand_window: int = 16,
     ):
         """Rerank precomputed embeddings and return `list[RerankResult]`.
 
         This is the no-encoder path for systems that already store embeddings.
         `editor="ccge_la"` applies an attached CCGE-LA editor; `ccge_top_n`
-        limits the edited prefix. Raises `ValueError` for invalid editor or
+        limits the edited prefix. `expander="memory_mla"` applies an attached
+        Memory-MLA expander after ConvMemory; `protect_top_k` keeps the leading
+        results byte-for-byte in order and `expand_window` bounds the suffix
+        reorder. Raises `ValueError` for invalid editor, expander, or
         window-mode settings.
         """
 
@@ -437,6 +526,18 @@ class ConvMemory:
             editor=editor,
             ccge_top_n=ccge_top_n,
         )
+        results = self._maybe_apply_expander(
+            results=results,
+            query_embedding=query_embedding,
+            memory_embeddings=memory_embeddings,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            candidate_indices=candidate_indices,
+            expander=expander,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
+        )
         return results[:top_k] if top_k is not None else results
 
     def expand_context_embeddings(
@@ -454,13 +555,17 @@ class ConvMemory:
         window_mode=None,
         editor=None,
         ccge_top_n: Optional[int] = None,
+        expander=None,
+        protect_top_k: int = 7,
+        expand_window: int = 16,
     ):
         """Expand context over precomputed embeddings.
 
         Protects a ConvMemory prefix, fills the remaining budget from
-        complementary rankings, and optionally applies `editor="ccge_la"`.
+        complementary rankings, optionally applies `editor="ccge_la"`, and can
+        apply `expander="memory_mla"` to the underlying ConvMemory rankings.
         Returns `list[RerankResult]`; raises `ValueError` for invalid policy,
-        editor, or window-mode arguments.
+        editor, expander, or window-mode arguments.
         """
 
         if context_budget <= 0:
@@ -483,6 +588,9 @@ class ConvMemory:
             window_mode=window_mode,
             editor=editor,
             ccge_top_n=ccge_top_n,
+            expander=expander,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
         )
         if context_budget <= protected_k:
             return self._rerank_with_new_positions(base_results[:context_budget])
@@ -514,6 +622,9 @@ class ConvMemory:
                 window_mode="candidate_local",
                 editor=editor,
                 ccge_top_n=ccge_top_n,
+                expander=expander,
+                protect_top_k=protect_top_k,
+                expand_window=expand_window,
             )
             rankings.append([result.memory_id for result in local_results])
             result_by_id.update({result.memory_id: result for result in local_results})
@@ -548,6 +659,54 @@ class ConvMemory:
                 context_budget=int(context_budget),
             )
         return self._rerank_with_new_positions(selected)
+
+    def _resolve_expander(self, expander):
+        message = "expander must be None, 'memory_mla', or a MemoryMLAExpander instance"
+        if expander is None:
+            return None
+        if isinstance(expander, MemoryMLAExpander):
+            return expander.to(self.device).eval()
+        if isinstance(expander, str):
+            if expander != "memory_mla":
+                raise ValueError(message)
+            if self.memory_mla_expander is None:
+                raise ValueError(
+                    "No Memory-MLA expander is attached. Call `load_expander(path)` "
+                    "or `attach_expander(expander)` before using expander='memory_mla'."
+                )
+            return self.memory_mla_expander
+        raise ValueError(message)
+
+    def _maybe_apply_expander(
+        self,
+        *,
+        results,
+        query_embedding,
+        memory_embeddings,
+        memory_ids,
+        memory_texts,
+        query,
+        candidate_indices,
+        expander,
+        protect_top_k: int,
+        expand_window: int,
+    ):
+        expander_module = self._resolve_expander(expander)
+        if expander_module is None or not results:
+            return results
+        return expander_module.expand_results(
+            results=results,
+            query_embedding=query_embedding,
+            memory_embeddings=memory_embeddings,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            candidate_indices=candidate_indices,
+            protect_top_k=protect_top_k,
+            expand_window=expand_window,
+            encoder=self.embedding_model,
+            device=self.device,
+        )
 
     def _resolve_editor(self, editor):
         message = "editor must be None, 'ccge_la', or a CCGELowAmplitudeEditor instance"

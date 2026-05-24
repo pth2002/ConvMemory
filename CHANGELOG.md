@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- No unreleased changes.
+- Added experimental ConvMemory v2 Memory-MLA prefix-protected expander API
+  (opt-in; v1 default behavior unchanged; no version bump).
 
 ## 0.4.0 - 2026-05-21
 
