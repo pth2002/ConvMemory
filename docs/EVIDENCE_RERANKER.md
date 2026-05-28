@@ -16,9 +16,8 @@ This means v2 is recall-preserving over v1 at top-10: it can improve ordering
 inside the v1 top-10, but it cannot rescue a memory that v1 failed to place in
 that protected set.
 
-Checkpoint distribution for the canonical v2 evidence reranker is TBD. The API
-is present in v0.5.0 so users can attach local or future Hub checkpoints
-explicitly.
+The canonical v2 evidence reranker checkpoint is published at
+`Purdy0228/ConvMemory-v2-Evidence-Reranker`. Loading remains explicit.
 
 ## API
 
@@ -26,7 +25,7 @@ explicitly.
 from convmemory import ConvMemory
 
 model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
-model.load_evidence_reranker("path-or-hub-id-tbd")
+model.load_evidence_reranker("Purdy0228/ConvMemory-v2-Evidence-Reranker")
 
 ranked = model.retrieve(
     query=query,
@@ -152,6 +151,7 @@ not as inference features.
   cannot recover it.
 - The headline result is LoCoMo-specific fine-tuning. Cross-domain users should
   train or validate their own evidence reranker.
-- Canonical checkpoint distribution is TBD.
+- Canonical checkpoint distribution:
+  `Purdy0228/ConvMemory-v2-Evidence-Reranker`.
 - The cross-question random-text test has been run as v364 B2
   `random_other_query_text`.

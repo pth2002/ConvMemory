@@ -264,14 +264,14 @@ ConvMemory v2 is an opt-in evidence reranker that runs after v1. It preserves
 the exact v1 top-10 candidate set, then uses token-level query/memory evidence
 to reorder only that protected prefix. This improves precision and MRR without
 changing v1 Recall@10; if v1 did not retrieve the gold memory into top-10, v2
-cannot rescue it. The v0.5.0 checkpoint distribution is TBD, so loading is
-explicit.
+cannot rescue it. The v0.5.0 evidence checkpoint is published on Hugging Face,
+but loading remains explicit.
 
 ```python
 from convmemory import ConvMemory
 
 model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
-model.load_evidence_reranker("path-or-hub-id-tbd")
+model.load_evidence_reranker("Purdy0228/ConvMemory-v2-Evidence-Reranker")
 
 ranked = model.retrieve(
     query=query,

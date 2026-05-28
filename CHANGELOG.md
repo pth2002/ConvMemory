@@ -14,6 +14,8 @@
   byte-identity vs 0.4.0, recall preservation, and save/load round-trip.
 - Added `docs/EVIDENCE_RERANKER.md` with v363 headline numbers and v364
   load-bearing ablation summary.
+- Published the v0.5.0 evidence reranker checkpoint on Hugging Face Hub:
+  `Purdy0228/ConvMemory-v2-Evidence-Reranker`.
 - Added `examples/train_evidence_reranker.py` and
   `examples/v2_evidence_reranker_demo.py`.
 - Renamed the experimental Memory-MLA expander away from the misleading `v2`

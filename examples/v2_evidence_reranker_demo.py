@@ -3,9 +3,9 @@
 Usage:
   python examples/v2_evidence_reranker_demo.py \
     --base Purdy0228/ConvMemory-LoCoMo-MPNet \
-    --evidence path-or-hub-id-tbd
+    --evidence Purdy0228/ConvMemory-v2-Evidence-Reranker
 
-Checkpoint distribution for the canonical v2 evidence reranker is TBD. If
+The canonical v2 evidence reranker checkpoint is `Purdy0228/ConvMemory-v2-Evidence-Reranker`. If
 `--evidence` is omitted, this script attaches an untrained default CrossEncoder
 only to demonstrate API shape; do not use that mode for quality evaluation.
 """
