@@ -1,9 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-05-28
 
-- Added experimental ConvMemory v2 Memory-MLA prefix-protected expander API
-  (opt-in; v1 default behavior unchanged; no version bump).
+- Added ConvMemory v2 evidence reranker: protected top-10 token-evidence
+  cross-encoder, recall-preserving over v1; opt-in API + tests + training
+  recipe + load-bearing ablation backing.
+- Added `convmemory.evidence_reranker` module (`EvidenceReranker`,
+  `EvidenceRerankerConfig`, `FORBIDDEN_FIELDS`).
+- Added `ConvMemory.attach_evidence_reranker` and
+  `ConvMemory.load_evidence_reranker`; added `evidence_reranker="v2"` opt-in
+  kwarg on `rerank`, `retrieve`, and `rerank_embeddings`.
+- Added tests covering anti-leak field rejection, default-behavior
+  byte-identity vs 0.4.0, recall preservation, and save/load round-trip.
+- Added `docs/EVIDENCE_RERANKER.md` with v363 headline numbers and v364
+  load-bearing ablation summary.
+- Added `examples/train_evidence_reranker.py` and
+  `examples/v2_evidence_reranker_demo.py`.
+- Renamed the experimental Memory-MLA expander away from the misleading `v2`
+  label; module name unchanged for backward compat, documentation updated to
+  call it `Memory-MLA Recall Expander`.
 
 ## 0.4.0 - 2026-05-21
 

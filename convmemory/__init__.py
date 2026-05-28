@@ -7,6 +7,7 @@ from .ccge import (
     rank_candidates,
 )
 from .api import ConvMemory
+from .evidence_reranker import EvidenceReranker, EvidenceRerankerConfig
 from .memory_mla import MemoryMLAConfig, MemoryMLAExpander
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .routing import (
@@ -21,6 +22,8 @@ __all__ = [
     "CompressedNoteConfig",
     "ConvMemory",
     "ConvMemoryReranker",
+    "EvidenceReranker",
+    "EvidenceRerankerConfig",
     "MemoryMLAConfig",
     "MemoryMLAExpander",
     "CCGEConfig",

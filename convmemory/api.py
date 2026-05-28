@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 from typing import Iterable, Optional, Sequence
 import warnings
 
@@ -8,11 +9,15 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 from .ccge import CCGELowAmplitudeEditor, build_ccge_features
+from .evidence_reranker import EvidenceReranker
 from .hub import resolve_checkpoint_path
 from .memory_mla import MemoryMLAExpander
 from .models import build_default_components
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .scoring import cosine_scores, lexical_signature
+
+
+_POSITION_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 class ConvMemory:
@@ -33,6 +38,7 @@ class ConvMemory:
         model_config=None,
         ccge_editor=None,
         expander=None,
+        evidence_reranker=None,
     ):
         self.device = device
         self.config = config or RerankConfig()
@@ -41,6 +47,7 @@ class ConvMemory:
         self.model_config = model_config or {}
         self.ccge_editor = None
         self.memory_mla_expander = None
+        self._evidence_reranker = None
         self.reranker = ConvMemoryReranker(
             conv_model=conv_model,
             scorer=scorer,
@@ -53,6 +60,8 @@ class ConvMemory:
             self.attach_ccge_editor(ccge_editor)
         if expander is not None:
             self.attach_expander(expander)
+        if evidence_reranker is not None:
+            self.attach_evidence_reranker(evidence_reranker)
 
     @classmethod
     def from_config(
@@ -63,6 +72,7 @@ class ConvMemory:
         config=None,
         ccge_editor=None,
         expander=None,
+        evidence_reranker=None,
         **model_kwargs,
     ):
         """Create a ConvMemory instance from dimensions and config.
@@ -103,6 +113,7 @@ class ConvMemory:
             model_config=model_config,
             ccge_editor=ccge_editor,
             expander=expander,
+            evidence_reranker=evidence_reranker,
         )
 
     @classmethod
@@ -273,6 +284,33 @@ class ConvMemory:
         )
         return self.attach_expander(expander)
 
+    def attach_evidence_reranker(self, reranker):
+        """Attach a protected top-k evidence reranker.
+
+        The reranker is disabled by default and is used only when callers pass
+        `evidence_reranker="v2"` to `rerank`, `retrieve`, or
+        `rerank_embeddings`.
+        """
+
+        if not isinstance(reranker, EvidenceReranker):
+            raise TypeError("reranker must be an EvidenceReranker")
+        self._evidence_reranker = reranker
+        return self
+
+    def load_evidence_reranker(self, path_or_hub_id: str, device=None):
+        """Load and attach an EvidenceReranker checkpoint.
+
+        `path_or_hub_id` may be a local checkpoint directory or a Hugging Face
+        Hub repo id. Checkpoint distribution for the v0.5.0 candidate remains
+        TBD, so this method is explicit opt-in.
+        """
+
+        reranker = EvidenceReranker.from_pretrained(
+            path_or_hub_id,
+            device=device or self.device,
+        )
+        return self.attach_evidence_reranker(reranker)
+
     def encode(self, texts):
         """Encode texts with the attached sentence-transformer encoder.
 
@@ -314,6 +352,7 @@ class ConvMemory:
         expander=None,
         protect_top_k: int = 7,
         expand_window: int = 16,
+        evidence_reranker=None,
     ):
         """Rerank text memories and return `list[RerankResult]`.
 
@@ -322,8 +361,10 @@ class ConvMemory:
         after ConvMemory. `ccge_top_n` limits how many top candidates are edited.
         `expander="memory_mla"` applies an attached Memory-MLA expander after
         the base ranking; `protect_top_k` preserves the prefix and
-        `expand_window` controls the reordered suffix. Raises `ValueError` for
-        invalid editor, expander, or window-mode settings.
+        `expand_window` controls the reordered suffix. `evidence_reranker="v2"`
+        reorders only the protected v1 top-k prefix with an attached evidence
+        reranker. Raises `ValueError` for invalid editor, expander, evidence
+        reranker, or window-mode settings.
         """
 
         memory_ids, memory_texts = self._parse_memories(memories)
@@ -351,6 +392,7 @@ class ConvMemory:
             expander=expander,
             protect_top_k=protect_top_k,
             expand_window=expand_window,
+            evidence_reranker=evidence_reranker,
         )
         return results[:top_k] if top_k is not None else results
 
@@ -371,6 +413,7 @@ class ConvMemory:
         expander=None,
         protect_top_k: int = 7,
         expand_window: int = 16,
+        evidence_reranker=None,
     ):
         """Retrieve memories and return `list[RerankResult]`.
 
@@ -380,8 +423,9 @@ class ConvMemory:
         `ccge_top_n` are passed through to the scoring path. `expander` may be
         `None`, `"memory_mla"`, or a `MemoryMLAExpander`; when enabled it is
         applied after the base ConvMemory ranking with a protected prefix.
-        Raises `ValueError` for unknown modes, policies, editors, expanders, or
-        window modes.
+        `evidence_reranker="v2"` applies an attached protected top-k evidence
+        reranker. Raises `ValueError` for unknown modes, policies, editors,
+        expanders, evidence rerankers, or window modes.
         """
         selected_mode = mode.lower().strip()
         if selected_mode == "rerank":
@@ -396,6 +440,7 @@ class ConvMemory:
                 expander=expander,
                 protect_top_k=protect_top_k,
                 expand_window=expand_window,
+                evidence_reranker=evidence_reranker,
             )
         if selected_mode not in {"expand", "context", "expand_context"}:
             raise ValueError("mode must be either 'rerank' or 'expand'")
@@ -420,6 +465,7 @@ class ConvMemory:
             expander=expander,
             protect_top_k=protect_top_k,
             expand_window=expand_window,
+            evidence_reranker=evidence_reranker,
         )
 
     def expand_context(
@@ -437,6 +483,7 @@ class ConvMemory:
         expander=None,
         protect_top_k: int = 7,
         expand_window: int = 16,
+        evidence_reranker=None,
     ):
         """Build a wider memory context and return `list[RerankResult]`.
 
@@ -444,9 +491,10 @@ class ConvMemory:
         The remaining slots are filled from complementary rankings, which can
         include raw dense retrieval, candidate-local window scoring, optional
         expert rankers, optional CCGE-LA editing via `editor`/`ccge_top_n`, and
-        optional Memory-MLA suffix expansion via `expander`.
-        Raises `ValueError` for invalid expansion policies, editor settings, or
-        expander settings.
+        optional Memory-MLA suffix expansion via `expander`, plus optional
+        protected top-k evidence reranking via `evidence_reranker="v2"`.
+        Raises `ValueError` for invalid expansion policies, editor settings,
+        expander settings, or evidence-reranker settings.
         """
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
@@ -477,6 +525,7 @@ class ConvMemory:
             expander=expander,
             protect_top_k=protect_top_k,
             expand_window=expand_window,
+            evidence_reranker=evidence_reranker,
         )
 
     def rerank_embeddings(
@@ -494,6 +543,7 @@ class ConvMemory:
         expander=None,
         protect_top_k: int = 7,
         expand_window: int = 16,
+        evidence_reranker=None,
     ):
         """Rerank precomputed embeddings and return `list[RerankResult]`.
 
@@ -502,8 +552,9 @@ class ConvMemory:
         limits the edited prefix. `expander="memory_mla"` applies an attached
         Memory-MLA expander after ConvMemory; `protect_top_k` keeps the leading
         results byte-for-byte in order and `expand_window` bounds the suffix
-        reorder. Raises `ValueError` for invalid editor, expander, or
-        window-mode settings.
+        reorder. `evidence_reranker="v2"` applies an attached evidence reranker
+        only to the protected top-k prefix. Raises `ValueError` for invalid
+        editor, expander, evidence reranker, or window-mode settings.
         """
 
         results = self.reranker.rerank_embeddings(
@@ -538,6 +589,13 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
         )
+        results = self._maybe_apply_evidence_reranker(
+            results=results,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            evidence_reranker=evidence_reranker,
+        )
         return results[:top_k] if top_k is not None else results
 
     def expand_context_embeddings(
@@ -558,14 +616,16 @@ class ConvMemory:
         expander=None,
         protect_top_k: int = 7,
         expand_window: int = 16,
+        evidence_reranker=None,
     ):
         """Expand context over precomputed embeddings.
 
         Protects a ConvMemory prefix, fills the remaining budget from
         complementary rankings, optionally applies `editor="ccge_la"`, and can
         apply `expander="memory_mla"` to the underlying ConvMemory rankings.
+        It can also apply `evidence_reranker="v2"` to the protected top-k prefix.
         Returns `list[RerankResult]`; raises `ValueError` for invalid policy,
-        editor, expander, or window-mode arguments.
+        editor, expander, evidence reranker, or window-mode arguments.
         """
 
         if context_budget <= 0:
@@ -591,6 +651,7 @@ class ConvMemory:
             expander=expander,
             protect_top_k=protect_top_k,
             expand_window=expand_window,
+            evidence_reranker=evidence_reranker,
         )
         if context_budget <= protected_k:
             return self._rerank_with_new_positions(base_results[:context_budget])
@@ -625,6 +686,7 @@ class ConvMemory:
                 expander=expander,
                 protect_top_k=protect_top_k,
                 expand_window=expand_window,
+                evidence_reranker=evidence_reranker,
             )
             rankings.append([result.memory_id for result in local_results])
             result_by_id.update({result.memory_id: result for result in local_results})
@@ -659,6 +721,84 @@ class ConvMemory:
                 context_budget=int(context_budget),
             )
         return self._rerank_with_new_positions(selected)
+
+    def _resolve_evidence_reranker(self, evidence_reranker):
+        message = "evidence_reranker must be None, 'v2', or an EvidenceReranker instance"
+        if evidence_reranker is None:
+            return None
+        if isinstance(evidence_reranker, EvidenceReranker):
+            return evidence_reranker
+        if isinstance(evidence_reranker, str):
+            if evidence_reranker != "v2":
+                raise ValueError(message)
+            if self._evidence_reranker is None:
+                raise ValueError(
+                    "No evidence reranker is attached. Call "
+                    "`load_evidence_reranker(path)` or "
+                    "`attach_evidence_reranker(reranker)` before using "
+                    "evidence_reranker='v2'."
+                )
+            return self._evidence_reranker
+        raise ValueError(message)
+
+    def _maybe_apply_evidence_reranker(
+        self,
+        *,
+        results,
+        memory_ids,
+        memory_texts,
+        query,
+        evidence_reranker,
+    ):
+        reranker = self._resolve_evidence_reranker(evidence_reranker)
+        if reranker is None or not results:
+            return results
+        top_n = min(int(reranker.config.top_k), len(results))
+        if top_n <= 0:
+            return results
+
+        memory_ids = [str(memory_id) for memory_id in memory_ids]
+        text_by_id = {result.memory_id: result.text for result in results}
+        if memory_texts is not None:
+            for memory_id, text in zip(memory_ids, memory_texts):
+                text_by_id.setdefault(str(memory_id), str(text))
+
+        prefix = list(results[:top_n])
+        candidates = [
+            {
+                "id": result.memory_id,
+                "text": text_by_id.get(result.memory_id) or "",
+                "position": self._position_from_memory_id(result.memory_id, fallback=idx),
+            }
+            for idx, result in enumerate(prefix)
+        ]
+        scores = reranker.score(query, candidates, device=self.device)
+        if len(scores) != len(prefix):
+            raise ValueError("evidence reranker returned the wrong number of scores")
+
+        score_by_id = {
+            result.memory_id: float(score)
+            for result, score in zip(prefix, scores)
+        }
+        result_by_id = {result.memory_id: result for result in prefix}
+        prefix_ids = set(result_by_id)
+        order = sorted(
+            [result.memory_id for result in prefix],
+            key=lambda memory_id: score_by_id[memory_id],
+            reverse=True,
+        )
+        reordered = [
+            RerankResult(
+                memory_id=memory_id,
+                score=score_by_id[memory_id],
+                raw_score=result_by_id[memory_id].raw_score,
+                rank=rank,
+                text=result_by_id[memory_id].text,
+            )
+            for rank, memory_id in enumerate(order, start=1)
+        ]
+        tail = [result for result in results if result.memory_id not in prefix_ids]
+        return self._rerank_with_new_positions([*reordered, *tail])
 
     def _resolve_expander(self, expander):
         message = "expander must be None, 'memory_mla', or a MemoryMLAExpander instance"
@@ -877,6 +1017,13 @@ class ConvMemory:
             )
             for rank, result in enumerate(results, start=1)
         ]
+
+    @staticmethod
+    def _position_from_memory_id(memory_id, fallback: int = 0) -> float:
+        matches = _POSITION_RE.findall(str(memory_id))
+        if matches:
+            return float(matches[-1])
+        return float(fallback)
 
     @staticmethod
     def _parse_memories(memories):

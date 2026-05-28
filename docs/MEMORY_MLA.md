@@ -1,9 +1,13 @@
-# ConvMemory v2: Memory-MLA Expander
+# Memory-MLA Expander
 
-Memory-MLA is an experimental ConvMemory v2 expander. It is an opt-in module
+Memory-MLA is an experimental recall expander. It is an opt-in module
 that runs after the base ConvMemory v1 ranking. The default API path remains v1:
 `retrieve(query, memories)` does not use Memory-MLA unless `expander="memory_mla"`
 is passed.
+
+Memory-MLA is not the v0.5.0 ConvMemory v2 evidence reranker. It remains a
+research-preview recall expansion module with the original `memory_mla` module
+name kept for backward compatibility.
 
 ## Mechanism
 
@@ -91,4 +95,4 @@ the same v320 archive was `v317_prefix7_expand20`:
 
 Interpretation: Memory-MLA gives a consistent recall-side gain in the v320
 archive, especially on T_SUP_auto and hard-recall slices. The MRR gains are
-small. This is an experimental v2 expander, not a SOTA claim.
+small. This is an experimental recall expander, not a SOTA claim.
