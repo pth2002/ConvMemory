@@ -15,6 +15,8 @@ from .memory_mla import MemoryMLAExpander
 from .models import build_default_components
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
 from .scoring import cosine_scores, lexical_signature
+from .validity import FORBIDDEN_FIELDS as VALIDITY_FORBIDDEN_FIELDS
+from .validity import ValidityEvidenceModule
 
 
 _POSITION_RE = re.compile(r"-?\d+(?:\.\d+)?")
@@ -39,6 +41,7 @@ class ConvMemory:
         ccge_editor=None,
         expander=None,
         evidence_reranker=None,
+        validity_module=None,
     ):
         self.device = device
         self.config = config or RerankConfig()
@@ -48,6 +51,7 @@ class ConvMemory:
         self.ccge_editor = None
         self.memory_mla_expander = None
         self._evidence_reranker = None
+        self._validity_module = None
         self.reranker = ConvMemoryReranker(
             conv_model=conv_model,
             scorer=scorer,
@@ -62,6 +66,8 @@ class ConvMemory:
             self.attach_expander(expander)
         if evidence_reranker is not None:
             self.attach_evidence_reranker(evidence_reranker)
+        if validity_module is not None:
+            self.attach_validity_module(validity_module)
 
     @classmethod
     def from_config(
@@ -73,6 +79,7 @@ class ConvMemory:
         ccge_editor=None,
         expander=None,
         evidence_reranker=None,
+        validity_module=None,
         **model_kwargs,
     ):
         """Create a ConvMemory instance from dimensions and config.
@@ -114,6 +121,7 @@ class ConvMemory:
             ccge_editor=ccge_editor,
             expander=expander,
             evidence_reranker=evidence_reranker,
+            validity_module=validity_module,
         )
 
     @classmethod
@@ -311,6 +319,34 @@ class ConvMemory:
         )
         return self.attach_evidence_reranker(reranker)
 
+    def attach_validity_module(self, validity_module):
+        """Attach a ConvMemory v3 validity context module.
+
+        The module is disabled unless callers pass `validity_mode="context"`
+        or `validity_mode="demote"`. Context mode annotates results without
+        changing order; demote mode is explicit opt-in and preserves the
+        candidate set while allowing score-based reordering.
+        """
+
+        if not isinstance(validity_module, ValidityEvidenceModule):
+            raise TypeError("validity_module must be a ValidityEvidenceModule")
+        self._validity_module = validity_module
+        return self
+
+    def load_validity_module(self, path_or_hub_id: str, device=None):
+        """Load and attach a ConvMemory v3 validity context module.
+
+        `path_or_hub_id` may be a local checkpoint directory or a Hugging Face
+        Hub repo id. Loading is explicit so the plain v1/v2 retrieval path
+        remains backward-compatible.
+        """
+
+        validity_module = ValidityEvidenceModule.from_pretrained(
+            path_or_hub_id,
+            device=device or self.device,
+        )
+        return self.attach_validity_module(validity_module)
+
     def encode(self, texts):
         """Encode texts with the attached sentence-transformer encoder.
 
@@ -353,6 +389,7 @@ class ConvMemory:
         protect_top_k: int = 7,
         expand_window: int = 16,
         evidence_reranker=None,
+        validity_mode=None,
     ):
         """Rerank text memories and return `list[RerankResult]`.
 
@@ -367,6 +404,8 @@ class ConvMemory:
         reranker, or window-mode settings.
         """
 
+        memories = list(memories)
+        self._validate_validity_memory_input(memories, validity_mode)
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
         query_embedding = embeddings[0]
@@ -393,6 +432,7 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
+            validity_mode=validity_mode,
         )
         return results[:top_k] if top_k is not None else results
 
@@ -414,6 +454,7 @@ class ConvMemory:
         protect_top_k: int = 7,
         expand_window: int = 16,
         evidence_reranker=None,
+        validity_mode=None,
     ):
         """Retrieve memories and return `list[RerankResult]`.
 
@@ -441,6 +482,7 @@ class ConvMemory:
                 protect_top_k=protect_top_k,
                 expand_window=expand_window,
                 evidence_reranker=evidence_reranker,
+                validity_mode=validity_mode,
             )
         if selected_mode not in {"expand", "context", "expand_context"}:
             raise ValueError("mode must be either 'rerank' or 'expand'")
@@ -466,6 +508,7 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
+            validity_mode=validity_mode,
         )
 
     def expand_context(
@@ -484,6 +527,7 @@ class ConvMemory:
         protect_top_k: int = 7,
         expand_window: int = 16,
         evidence_reranker=None,
+        validity_mode=None,
     ):
         """Build a wider memory context and return `list[RerankResult]`.
 
@@ -496,6 +540,8 @@ class ConvMemory:
         Raises `ValueError` for invalid expansion policies, editor settings,
         expander settings, or evidence-reranker settings.
         """
+        memories = list(memories)
+        self._validate_validity_memory_input(memories, validity_mode)
         memory_ids, memory_texts = self._parse_memories(memories)
         embeddings = self.encode([query, *memory_texts])
         query_embedding = embeddings[0]
@@ -526,6 +572,7 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
+            validity_mode=validity_mode,
         )
 
     def rerank_embeddings(
@@ -544,6 +591,7 @@ class ConvMemory:
         protect_top_k: int = 7,
         expand_window: int = 16,
         evidence_reranker=None,
+        validity_mode=None,
     ):
         """Rerank precomputed embeddings and return `list[RerankResult]`.
 
@@ -596,6 +644,13 @@ class ConvMemory:
             query=query,
             evidence_reranker=evidence_reranker,
         )
+        results = self._maybe_apply_validity_module(
+            results=results,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            validity_mode=validity_mode,
+        )
         return results[:top_k] if top_k is not None else results
 
     def expand_context_embeddings(
@@ -617,6 +672,7 @@ class ConvMemory:
         protect_top_k: int = 7,
         expand_window: int = 16,
         evidence_reranker=None,
+        validity_mode=None,
     ):
         """Expand context over precomputed embeddings.
 
@@ -652,6 +708,7 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
+            validity_mode=validity_mode,
         )
         if context_budget <= protected_k:
             return self._rerank_with_new_positions(base_results[:context_budget])
@@ -687,6 +744,7 @@ class ConvMemory:
                 protect_top_k=protect_top_k,
                 expand_window=expand_window,
                 evidence_reranker=evidence_reranker,
+                validity_mode=validity_mode,
             )
             rankings.append([result.memory_id for result in local_results])
             result_by_id.update({result.memory_id: result for result in local_results})
@@ -799,6 +857,70 @@ class ConvMemory:
         ]
         tail = [result for result in results if result.memory_id not in prefix_ids]
         return self._rerank_with_new_positions([*reordered, *tail])
+
+    def _resolve_validity_mode(self, validity_mode):
+        if validity_mode is None:
+            return None
+        if isinstance(validity_mode, str):
+            mode = validity_mode.lower().strip()
+            if mode == "off":
+                return None
+            if mode in {"context", "demote"}:
+                if self._validity_module is None:
+                    raise ValueError(
+                        "No validity module is attached. Call "
+                        "`load_validity_module(path)` or "
+                        "`attach_validity_module(module)` before using "
+                        f"validity_mode='{mode}'."
+                    )
+                return mode
+        raise ValueError("validity_mode must be None, 'off', 'context', or 'demote'")
+
+    def _maybe_apply_validity_module(
+        self,
+        *,
+        results,
+        memory_ids,
+        memory_texts,
+        query,
+        validity_mode,
+    ):
+        mode = self._resolve_validity_mode(validity_mode)
+        if mode is None or not results:
+            return results
+        memories = self._validity_memories(memory_ids, memory_texts)
+        return self._validity_module.apply(
+            query=query,
+            results=results,
+            memories=memories,
+            mode=mode,
+        )
+
+    @staticmethod
+    def _validity_memories(memory_ids, memory_texts):
+        if memory_texts is None:
+            memory_texts = ["" for _ in memory_ids]
+        memories = []
+        for idx, (memory_id, text) in enumerate(zip(memory_ids, memory_texts)):
+            memories.append(
+                {
+                    "id": str(memory_id),
+                    "text": str(text),
+                    "position": idx,
+                }
+            )
+        return memories
+
+    def _validate_validity_memory_input(self, memories, validity_mode):
+        if self._resolve_validity_mode(validity_mode) is None:
+            return
+        for memory in memories:
+            if isinstance(memory, str):
+                continue
+            blocked = VALIDITY_FORBIDDEN_FIELDS.intersection(memory.keys())
+            if blocked:
+                field = sorted(blocked)[0]
+                raise ValueError(f"field '{field}' is not allowed at inference")
 
     def _resolve_expander(self, expander):
         message = "expander must be None, 'memory_mla', or a MemoryMLAExpander instance"
@@ -1014,6 +1136,7 @@ class ConvMemory:
                 raw_score=result.raw_score,
                 rank=rank,
                 text=result.text,
+                validity=result.validity,
             )
             for rank, result in enumerate(results, start=1)
         ]

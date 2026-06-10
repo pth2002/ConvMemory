@@ -17,6 +17,7 @@ from .routing import (
     CompressionRouter,
     build_compressed_notes,
 )
+from .validity import ValidityAnnotation, ValidityEvidenceConfig, ValidityEvidenceModule
 
 __all__ = [
     "CompressedNoteConfig",
@@ -34,6 +35,9 @@ __all__ = [
     "CompressionRouter",
     "RerankConfig",
     "RerankResult",
+    "ValidityAnnotation",
+    "ValidityEvidenceConfig",
+    "ValidityEvidenceModule",
     "build_ccge_features",
     "build_compressed_notes",
     "multi_positive_retrieval_loss",

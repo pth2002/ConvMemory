@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0 - 2026-06-09
+
+- Added ConvMemory v3 validity context layer API support:
+  `convmemory.validity` with `ValidityEvidenceModule`,
+  `ValidityEvidenceConfig`, and `ValidityAnnotation`.
+- Added CrossEncoder-backed validity scoring with the v506/v511
+  query/source/target demotion format, including binary scorer support via
+  `cross_encoder_num_labels`.
+- Added batched explicit evidence scoring via
+  `ValidityEvidenceModule.score_evidence_pairs(...)` for packaged v3
+  query/source/target demotion scorers.
+- Added `ConvMemory.attach_validity_module` and
+  `ConvMemory.load_validity_module`; added `validity_mode` on retrieve/rerank
+  paths with `off`, `context`, and opt-in `demote` semantics.
+- Added tests for byte-identical off mode, context-mode rank preservation,
+  demote candidate-set preservation, forbidden-field rejection, safe evidence
+  output, invalid mode rejection, and save/load round-trip.
+- Added `docs/VALIDITY_CONTEXT.md` and README entry documenting v3 as a
+  validity context layer, not a default automatic graph-demotion system.
+- Added `docs/V3_MODEL_CARD.md` with method-level, checkpoint-level, and
+  package-level provenance plus a source-of-truth ledger.
+- Added `examples/v3_validity_context_demo.py` as a no-download API shape demo.
+
 ## 0.5.0 - 2026-05-28
 
 - Added ConvMemory v2 evidence reranker: protected top-10 token-evidence

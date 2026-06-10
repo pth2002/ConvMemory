@@ -26,7 +26,7 @@ reranker. Its intended use is recall-oriented memory selection for structured
 memory streams: conversations, user histories, agent traces, task logs, and
 session-level notes.
 
-Current package version: `0.5.0`
+Current package version: `0.6.0`
 
 ## When To Use It
 
@@ -283,6 +283,31 @@ ranked = model.retrieve(
 
 See [Evidence Reranker](docs/EVIDENCE_RERANKER.md) for the v363 headline
 numbers, v364 load-bearing ablations, anti-leak guards, and limitations.
+
+### ConvMemory v3: Validity Context Layer
+
+ConvMemory v3 adds validity evidence for agent memory without changing v1/v2
+ranking by default. In `validity_mode="context"`, returned memories can carry a
+structured `validity` note with possible update evidence; the rank order and
+candidate set are preserved. Automatic demotion is available only as an explicit
+opt-in mode for dense current-state/update workloads.
+
+```python
+model.load_validity_module("Purdy0228/ConvMemory-v3-Validity-Context")
+
+ranked = model.retrieve(
+    query=query,
+    memories=candidates,
+    evidence_reranker="v2",
+    validity_mode="context",
+    top_k=10,
+)
+```
+
+See [Validity Context](docs/VALIDITY_CONTEXT.md) for mode semantics and safety
+contracts. See [V3 Model Card](docs/V3_MODEL_CARD.md) for checkpoint
+provenance, package-level benchmark numbers, latency, and the source-of-truth
+ledger.
 
 ### Experimental Memory-MLA Recall Expander
 

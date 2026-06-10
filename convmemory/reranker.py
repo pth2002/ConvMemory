@@ -31,6 +31,7 @@ class RerankResult:
     raw_score: float
     rank: int
     text: Optional[str] = None
+    validity: Optional[dict] = None
 
 
 def sliding_windows(num_items: int, window_size: int, stride: int):
