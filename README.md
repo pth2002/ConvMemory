@@ -309,6 +309,42 @@ contracts. See [V3 Model Card](docs/V3_MODEL_CARD.md) for checkpoint
 provenance, package-level benchmark numbers, latency, and the source-of-truth
 ledger.
 
+### Chinese ConvMemory: Dual-Space GTE
+
+The Chinese retrieval module is available through the same package interface.
+It uses a dual-space bi-encoder representation, then applies the lightweight
+ConvMemory window encoder and CE-lite reranker. The online path still encodes
+queries and memories separately; Jina/cross-encoder scores were used only as
+offline teacher supervision.
+
+```python
+from convmemory import ChineseConvMemory
+
+model = ChineseConvMemory.from_pretrained(
+    "Purdy0228/ConvMemory-ZH-DualSpace-GTE",
+    device="cuda",  # or "cpu"
+)
+
+ranked = model.rerank(
+    query="用户最近喜欢什么音乐？",
+    memories=[
+        {"id": "m1", "text": "用户喜欢周杰伦的音乐。"},
+        {"id": "m2", "text": "用户最近在学习法语。"},
+    ],
+    top_k=5,
+)
+```
+
+The Hub checkpoint bundles the lightweight ConvMemory student (`student.pt`) and
+the tuned Chinese triplet encoder (`triplet_encoder/`). Users do not need to
+manually assemble v597/v601 experiment artifacts; `from_pretrained(...)` resolves
+the release repository and loads the full dual-space model.
+
+The v601 five-seed method-level result is R@10 0.7855-0.7871 and MRR
+0.6145-0.6153, depending on whether the row is selected by R@10 or MRR. The
+released representative checkpoint is seed 31 and is validated by a
+checkpoint-load smoke test.
+
 ### Experimental Memory-MLA Recall Expander
 
 This is **not** the v0.5.0 evidence reranker. See "ConvMemory v2: Evidence

@@ -7,6 +7,7 @@ from .ccge import (
     rank_candidates,
 )
 from .api import ConvMemory
+from .chinese import ChineseConvMemory, DualSpaceTextEncoder
 from .evidence_reranker import EvidenceReranker, EvidenceRerankerConfig
 from .memory_mla import MemoryMLAConfig, MemoryMLAExpander
 from .reranker import ConvMemoryReranker, RerankConfig, RerankResult
@@ -33,6 +34,8 @@ __all__ = [
     "CompressionRouteConfig",
     "CompressionRouteResult",
     "CompressionRouter",
+    "ChineseConvMemory",
+    "DualSpaceTextEncoder",
     "RerankConfig",
     "RerankResult",
     "ValidityAnnotation",
