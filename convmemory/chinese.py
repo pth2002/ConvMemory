@@ -131,6 +131,37 @@ class DualSpaceTextEncoder:
         return normalize_rows(merged)
 
 
+class SingleSpaceTextEncoder:
+    """Single SentenceTransformer encoder used by OPC-style checkpoints."""
+
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        device: str = "cpu",
+        batch_size: int = 64,
+        trust_remote_code: bool = True,
+    ):
+        self.model_name = str(model_name)
+        self.device = device
+        self.batch_size = int(batch_size)
+        self.model = SentenceTransformer(
+            self.model_name,
+            device=device,
+            trust_remote_code=trust_remote_code,
+        )
+
+    def encode(self, texts: Iterable[str]) -> np.ndarray:
+        rows = self.model.encode(
+            list(texts),
+            batch_size=self.batch_size,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        ).astype(np.float32)
+        return normalize_rows(rows)
+
+
 def _parse_memories(memories: Iterable):
     memory_ids = []
     memory_texts = []
@@ -505,6 +536,63 @@ class ChineseConvMemory:
         )
 
 
+class OPCConvMemory(ChineseConvMemory):
+    """OPC-style Chinese ConvMemory student reranker.
+
+    This checkpoint family keeps the ConvMemory inference pattern but uses a
+    single Chinese-specialized dense encoder instead of the older dual-space
+    GTE encoder: bge-base-zh embeddings -> ConvMemory window encoder -> CE-lite
+    student head.
+    """
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        path_or_hub_id: str | Path,
+        *,
+        device: str = "cpu",
+        encoder_model: Optional[str] = None,
+        encoder_batch_size: int = 64,
+        trust_remote_code: bool = True,
+    ):
+        path = resolve_checkpoint_path(path_or_hub_id)
+        config = json.loads((path / "config.json").read_text(encoding="utf-8"))
+        encoder_cfg = config["encoder"]
+        model_name = encoder_model or encoder_cfg["model"]
+
+        arch = config["architecture"]
+        conv_model = MixerConvMemoryEncoder(
+            int(arch["embedding_dim"]),
+            window_size=int(arch["window_size"]),
+            kernel_size=int(arch["kernel"]),
+            hidden_dim=int(arch["mixer_hidden_dim"]),
+            token_mlp_dim=int(arch["mixer_token_dim"]),
+            channel_mlp_dim=int(arch["mixer_channel_dim"]),
+            output_mode="residual",
+            output_gate_init=0.1,
+            score_mode="cosine",
+        )
+        scorer = PairwiseCELiteScorer(
+            int(arch["embedding_dim"]),
+            hidden_dim=int(arch["ce_hidden_dim"]),
+            extra_scalar_features=int(arch["extra_scalar_features"]),
+            interaction_dim=int(arch["interaction_dim"]),
+        )
+        try:
+            state = torch.load(path / "student.pt", map_location="cpu", weights_only=True)
+        except TypeError:
+            state = torch.load(path / "student.pt", map_location="cpu")
+        conv_model.load_state_dict(state["model_state_dict"])
+        scorer.load_state_dict(state["scorer_state_dict"])
+        encoder = SingleSpaceTextEncoder(
+            model_name,
+            device=device,
+            batch_size=encoder_batch_size,
+            trust_remote_code=trust_remote_code,
+        )
+        return cls(conv_model, scorer, encoder, config, device=device)
+
+
 def _best_window_scores(window_logits, memory_to_windows, candidate_indices, device):
     fallback_value = float(window_logits.min().detach().cpu())
     window_values = window_logits.detach().cpu().numpy()
@@ -525,4 +613,3 @@ def _local_window_scores(model, item, device):
     query_batch = query.expand(window_batch.shape[0], -1)
     blocks = model(window_batch, query=query_batch)
     return (query @ blocks.T).squeeze(0)
-

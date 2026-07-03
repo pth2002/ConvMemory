@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 - 2026-07-03
+
+- Added `OPCConvMemory`, an OPC-style Chinese ConvMemory student that keeps the
+  ConvMemory window encoder and CE-lite reranker while using a single
+  Chinese-specialized BGE encoder.
+- Added `SingleSpaceTextEncoder` for BGE-backed Chinese checkpoints.
+- Added package tests for loading and scoring an OPC-style checkpoint without
+  requiring a live Hugging Face download.
+- Published the matching checkpoint on Hugging Face Hub:
+  `Purdy0228/ConvMemory-OPC-Student-BGE`.
+
 ## 0.6.0 - 2026-06-09
 
 - Added ConvMemory v3 validity context layer API support:
