@@ -26,7 +26,7 @@ reranker. Its intended use is recall-oriented memory selection for structured
 memory streams: conversations, user histories, agent traces, task logs, and
 session-level notes.
 
-Current package version: `0.6.0`
+Current package version: `0.6.1`
 
 ## When To Use It
 
@@ -379,6 +379,40 @@ the student is much faster than the online teacher for large candidate pools;
 the phase-0 gate did not show a statistically robust improvement over
 `BAAI/bge-base-zh-v1.5` cosine retrieval, so small candidate pools may be better
 served by the dense retriever alone.
+
+### OPC-v3: Validity Context Module
+
+OPC-v3 is a validity layer for OPC-style memory updates. It does not replace
+the Chinese retriever. It scores a query, a later source/update memory, and a
+target memory to decide whether the target should be surfaced as possibly
+outdated for that query.
+
+```python
+from convmemory import ValidityEvidenceModule
+
+module = ValidityEvidenceModule.from_pretrained(
+    "Purdy0228/ConvMemory-OPC-V3-Validity-Context",
+    device="cuda",  # or "cpu"
+)
+
+scores = module.score_evidence_pairs(
+    [
+        {
+            "query": "What is the current pricing plan?",
+            "source": {
+                "text": "Later update: pricing changed from 99/299 to 129/399."
+            },
+            "target": {"text": "Earlier note: pricing was 99/299."},
+        }
+    ]
+)
+```
+
+The selected checkpoint is the v632 operating point. On the handwritten OPC
+smoke set it reports pair accuracy 98.96%, demote recall 100.00%, protect recall
+98.81%, and scenario all-correct 91.67%. See
+[OPC-v3 Validity](docs/OPC_V3_VALIDITY.md) for the model card, boundary, and
+recommended use.
 
 ### Experimental Memory-MLA Recall Expander
 

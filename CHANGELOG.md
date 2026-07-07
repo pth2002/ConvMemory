@@ -10,6 +10,9 @@
   requiring a live Hugging Face download.
 - Published the matching checkpoint on Hugging Face Hub:
   `Purdy0228/ConvMemory-OPC-Student-BGE`.
+- Added OPC-v3 validity context documentation and the matching Hugging Face
+  checkpoint:
+  `Purdy0228/ConvMemory-OPC-V3-Validity-Context`.
 
 ## 0.6.0 - 2026-06-09
 
