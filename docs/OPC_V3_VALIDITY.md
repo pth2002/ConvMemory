@@ -45,6 +45,9 @@ scores = module.score_evidence_pairs(pairs)
 When attached to a `ConvMemory` instance, `validity_mode="context"` preserves
 the retrieved order and adds structured validity metadata. `validity_mode="demote"`
 is explicit opt-in and should be used only for current-state/update workloads.
+Pass the selected update for each target through `validity_source_map` when an
+OPC memory index already tracks revisions. This avoids searching every memory
+pair and keeps one scorer call per protected target.
 
 ## Selected Recipe
 
@@ -81,7 +84,7 @@ Use this module after ordinary retrieval/reranking:
 ```text
 dense / ConvMemory / teacher retrieval
 -> pick one later update source per candidate
--> OPC-v3 validity context
+-> OPC-v3 validity context via validity_source_map
 -> context annotation by default
 -> demote only for explicit current-state queries
 ```

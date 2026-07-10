@@ -300,9 +300,20 @@ ranked = model.retrieve(
     memories=candidates,
     evidence_reranker="v2",
     validity_mode="context",
+    validity_source_map={
+        "old-memory-id": {
+            "id": "later-update-id",
+            "text": "Later update evidence for the old memory.",
+        }
+    },
     top_k=10,
 )
 ```
+
+`validity_source_map` is the recommended production path when the application
+already has an update/evidence index. Without it, ConvMemory performs a bounded
+top-1 lexical source selection for each protected target; it does not run an
+unbounded all-pairs validity search.
 
 See [Validity Context](docs/VALIDITY_CONTEXT.md) for mode semantics and safety
 contracts. See [V3 Model Card](docs/V3_MODEL_CARD.md) for checkpoint

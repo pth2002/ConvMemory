@@ -300,7 +300,203 @@ def test_validity_cross_encoder_batches_apply_pairs():
     module.annotate(query="what is current?", results=results, memories=memories)
 
     assert len(cross_encoder.calls) == 1
-    assert cross_encoder.calls[0] == {"n_pairs": 4, "batch_size": 16}
+    assert cross_encoder.calls[0] == {"n_pairs": 2, "batch_size": 16}
+
+
+def test_validity_auto_source_policy_scores_at_most_one_source_per_target():
+    cross_encoder = FakeCrossEncoder()
+    module = ValidityEvidenceModule(
+        ValidityEvidenceConfig(cross_encoder_model="fake-model", source_policy="top1"),
+        cross_encoder=cross_encoder,
+    )
+    memories = [
+        {"id": "m0", "text": "old Paris plan", "position": 0},
+        {"id": "m1", "text": "new Paris update", "position": 1},
+        {"id": "m2", "text": "another Paris update", "position": 2},
+        {"id": "m3", "text": "unrelated note", "position": 3},
+    ]
+    results = [
+        type("Result", (), {"memory_id": memory["id"], "text": memory["text"]})()
+        for memory in memories
+    ]
+
+    module.annotate(query="what is current?", results=results, memories=memories)
+
+    assert cross_encoder.calls == [{"n_pairs": 3, "batch_size": 32}]
+
+
+def test_validity_explicit_source_map_skips_internal_source_search():
+    cross_encoder = FakeCrossEncoder()
+    module = ValidityEvidenceModule(
+        ValidityEvidenceConfig(cross_encoder_model="fake-model"),
+        cross_encoder=cross_encoder,
+    )
+    memories = [
+        {"id": "m0", "text": "old Paris plan", "position": 0},
+        {"id": "m1", "text": "irrelevant note", "position": 1},
+        {"id": "m2", "text": "new Paris update", "position": 2},
+    ]
+    results = [type("Result", (), {"memory_id": "m0", "text": "old Paris plan"})()]
+
+    module.annotate(
+        query="what is current?",
+        results=results,
+        memories=memories,
+        source_evidence={"m0": "m2"},
+    )
+
+    assert cross_encoder.calls == [{"n_pairs": 1, "batch_size": 32}]
+    left, right = cross_encoder.last_pairs[0]
+    assert "new Paris update" in left
+    assert "old Paris plan" in right
+
+
+def test_validity_auto_source_policy_supports_chinese_overlap():
+    cross_encoder = FakeCrossEncoder()
+    module = ValidityEvidenceModule(
+        ValidityEvidenceConfig(cross_encoder_model="fake-model"),
+        cross_encoder=cross_encoder,
+    )
+    memories = [
+        {"id": "m0", "text": "旧定价方案是基础版99元", "position": 0},
+        {"id": "m1", "text": "后来开始学习吉他", "position": 1},
+        {"id": "m2", "text": "定价方案后来更新为基础版129元", "position": 2},
+    ]
+    results = [type("Result", (), {"memory_id": "m0", "text": memories[0]["text"]})()]
+
+    module.annotate(query="现在的定价方案是什么", results=results, memories=memories)
+
+    left, _ = cross_encoder.last_pairs[0]
+    assert "定价方案后来更新" in left
+
+
+def test_validity_rejects_earlier_explicit_source():
+    cross_encoder = FakeCrossEncoder()
+    module = ValidityEvidenceModule(
+        ValidityEvidenceConfig(cross_encoder_model="fake-model", require_later_source=True),
+        cross_encoder=cross_encoder,
+    )
+    memories = [
+        {"id": "m0", "text": "earlier Paris note", "position": 0},
+        {"id": "m1", "text": "current Paris plan", "position": 1},
+    ]
+    results = [type("Result", (), {"memory_id": "m1", "text": "current Paris plan"})()]
+
+    annotations = module.annotate(
+        query="what is current?",
+        results=results,
+        memories=memories,
+        source_evidence={"m1": "m0"},
+    )
+
+    assert cross_encoder.calls == []
+    assert annotations[0].status == "unknown"
+
+
+def test_validity_explicit_source_rejects_forbidden_fields():
+    module = ValidityEvidenceModule(scorer=scorer)
+    memories = [{"id": "m0", "text": "old Paris plan", "position": 0}]
+    results = [type("Result", (), {"memory_id": "m0", "text": "old Paris plan"})()]
+
+    with pytest.raises(ValueError, match="field 'teacher_score' is not allowed"):
+        module.annotate(
+            query="what is current?",
+            results=results,
+            memories=memories,
+            source_evidence={
+                "m0": {"id": "external", "text": "new Paris update", "teacher_score": 1.0}
+            },
+        )
+
+
+def test_demote_preserves_requested_top_k_set(device):
+    model = tiny_model(device)
+    model.attach_validity_module(
+        ValidityEvidenceModule(
+            ValidityEvidenceConfig(demote_threshold=0.1, demote_score_scale=10.0),
+            scorer=lambda query, target, source: 0.9,
+        )
+    )
+    query, memories, ids, texts = tiny_inputs()
+    base = model.rerank_embeddings(query, memories, ids, texts, query="trip", top_k=3)
+    source_map = {
+        result.memory_id: {"id": f"source-{idx}", "text": "later update evidence"}
+        for idx, result in enumerate(base)
+    }
+
+    demoted = model.rerank_embeddings(
+        query,
+        memories,
+        ids,
+        texts,
+        query="trip",
+        top_k=3,
+        validity_mode="demote",
+        validity_source_map=source_map,
+    )
+
+    assert {item.memory_id for item in demoted} == {item.memory_id for item in base}
+
+
+def test_integrated_validity_limits_targets_when_top_k_is_omitted(device):
+    calls = []
+
+    def counting_scorer(query, target, source):
+        calls.append((query, target["id"], source["id"]))
+        return 0.9
+
+    model = tiny_model(device)
+    model.attach_validity_module(
+        ValidityEvidenceModule(
+            ValidityEvidenceConfig(candidate_top_k=3),
+            scorer=counting_scorer,
+        )
+    )
+    query, memories, ids, texts = tiny_inputs()
+    source_map = {
+        memory_id: {"id": f"source-{idx}", "text": "later update evidence"}
+        for idx, memory_id in enumerate(ids)
+    }
+
+    context = model.rerank_embeddings(
+        query,
+        memories,
+        ids,
+        texts,
+        query="trip",
+        validity_mode="context",
+        validity_source_map=source_map,
+    )
+
+    assert len(calls) == 3
+    assert all(item.validity is not None for item in context[:3])
+    assert all(item.validity is None for item in context[3:])
+
+
+def test_expand_context_applies_validity_after_final_selection(device):
+    model = tiny_model(device)
+    model.attach_validity_module(
+        ValidityEvidenceModule(scorer=lambda query, target, source: 0.9)
+    )
+    query, memories, ids, texts = tiny_inputs()
+    source_map = {
+        memory_id: {"id": f"source-{idx}", "text": "later update evidence"}
+        for idx, memory_id in enumerate(ids)
+    }
+
+    context = model.expand_context_embeddings(
+        query_embedding=query,
+        memory_embeddings=memories,
+        memory_ids=ids,
+        memory_texts=texts,
+        query="trip",
+        context_budget=5,
+        validity_mode="context",
+        validity_source_map=source_map,
+    )
+
+    assert len(context) == 5
+    assert all(item.validity is not None for item in context)
 
 
 def test_validity_score_evidence_pairs_batches_explicit_pairs():

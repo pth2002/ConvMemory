@@ -390,6 +390,7 @@ class ConvMemory:
         expand_window: int = 16,
         evidence_reranker=None,
         validity_mode=None,
+        validity_source_map=None,
     ):
         """Rerank text memories and return `list[RerankResult]`.
 
@@ -400,8 +401,9 @@ class ConvMemory:
         the base ranking; `protect_top_k` preserves the prefix and
         `expand_window` controls the reordered suffix. `evidence_reranker="v2"`
         reorders only the protected v1 top-k prefix with an attached evidence
-        reranker. Raises `ValueError` for invalid editor, expander, evidence
-        reranker, or window-mode settings.
+        reranker. `validity_source_map` may provide one selected update source
+        per target id and skips internal source selection. Raises `ValueError`
+        for invalid editor, expander, evidence reranker, or window-mode settings.
         """
 
         memories = list(memories)
@@ -433,8 +435,10 @@ class ConvMemory:
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
             validity_mode=validity_mode,
+            validity_source_map=validity_source_map,
+            top_k=top_k,
         )
-        return results[:top_k] if top_k is not None else results
+        return results
 
     def retrieve(
         self,
@@ -455,6 +459,7 @@ class ConvMemory:
         expand_window: int = 16,
         evidence_reranker=None,
         validity_mode=None,
+        validity_source_map=None,
     ):
         """Retrieve memories and return `list[RerankResult]`.
 
@@ -466,7 +471,8 @@ class ConvMemory:
         applied after the base ConvMemory ranking with a protected prefix.
         `evidence_reranker="v2"` applies an attached protected top-k evidence
         reranker. Raises `ValueError` for unknown modes, policies, editors,
-        expanders, evidence rerankers, or window modes.
+        expanders, evidence rerankers, or window modes. `validity_source_map`
+        is forwarded to either retrieval mode.
         """
         selected_mode = mode.lower().strip()
         if selected_mode == "rerank":
@@ -483,6 +489,7 @@ class ConvMemory:
                 expand_window=expand_window,
                 evidence_reranker=evidence_reranker,
                 validity_mode=validity_mode,
+                validity_source_map=validity_source_map,
             )
         if selected_mode not in {"expand", "context", "expand_context"}:
             raise ValueError("mode must be either 'rerank' or 'expand'")
@@ -509,6 +516,7 @@ class ConvMemory:
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
             validity_mode=validity_mode,
+            validity_source_map=validity_source_map,
         )
 
     def expand_context(
@@ -528,6 +536,7 @@ class ConvMemory:
         expand_window: int = 16,
         evidence_reranker=None,
         validity_mode=None,
+        validity_source_map=None,
     ):
         """Build a wider memory context and return `list[RerankResult]`.
 
@@ -537,6 +546,7 @@ class ConvMemory:
         expert rankers, optional CCGE-LA editing via `editor`/`ccge_top_n`, and
         optional Memory-MLA suffix expansion via `expander`, plus optional
         protected top-k evidence reranking via `evidence_reranker="v2"`.
+        `validity_source_map` supplies preselected update evidence by target id.
         Raises `ValueError` for invalid expansion policies, editor settings,
         expander settings, or evidence-reranker settings.
         """
@@ -573,6 +583,7 @@ class ConvMemory:
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
             validity_mode=validity_mode,
+            validity_source_map=validity_source_map,
         )
 
     def rerank_embeddings(
@@ -592,6 +603,8 @@ class ConvMemory:
         expand_window: int = 16,
         evidence_reranker=None,
         validity_mode=None,
+        validity_source_map=None,
+        validity_target_limit: Optional[int] = None,
     ):
         """Rerank precomputed embeddings and return `list[RerankResult]`.
 
@@ -603,6 +616,8 @@ class ConvMemory:
         reorder. `evidence_reranker="v2"` applies an attached evidence reranker
         only to the protected top-k prefix. Raises `ValueError` for invalid
         editor, expander, evidence reranker, or window-mode settings.
+        `validity_source_map` bypasses automatic source selection, while
+        `validity_target_limit` bounds how many leading results receive v3.
         """
 
         results = self.reranker.rerank_embeddings(
@@ -650,6 +665,12 @@ class ConvMemory:
             memory_texts=memory_texts,
             query=query,
             validity_mode=validity_mode,
+            validity_source_map=validity_source_map,
+            target_limit=(
+                validity_target_limit
+                if validity_target_limit is not None
+                else top_k
+            ),
         )
         return results[:top_k] if top_k is not None else results
 
@@ -673,6 +694,7 @@ class ConvMemory:
         expand_window: int = 16,
         evidence_reranker=None,
         validity_mode=None,
+        validity_source_map=None,
     ):
         """Expand context over precomputed embeddings.
 
@@ -680,6 +702,7 @@ class ConvMemory:
         complementary rankings, optionally applies `editor="ccge_la"`, and can
         apply `expander="memory_mla"` to the underlying ConvMemory rankings.
         It can also apply `evidence_reranker="v2"` to the protected top-k prefix.
+        `validity_source_map` is applied once after the final context is chosen.
         Returns `list[RerankResult]`; raises `ValueError` for invalid policy,
         editor, expander, evidence reranker, or window-mode arguments.
         """
@@ -708,10 +731,19 @@ class ConvMemory:
             protect_top_k=protect_top_k,
             expand_window=expand_window,
             evidence_reranker=evidence_reranker,
-            validity_mode=validity_mode,
+            validity_mode=None,
         )
         if context_budget <= protected_k:
-            return self._rerank_with_new_positions(base_results[:context_budget])
+            selected_results = self._rerank_with_new_positions(base_results[:context_budget])
+            return self._maybe_apply_validity_module(
+                results=selected_results,
+                memory_ids=memory_ids,
+                memory_texts=memory_texts,
+                query=query,
+                validity_mode=validity_mode,
+                validity_source_map=validity_source_map,
+                target_limit=len(selected_results),
+            )
 
         result_by_id = {result.memory_id: result for result in base_results}
         selected = list(base_results[:protected_k])
@@ -744,7 +776,7 @@ class ConvMemory:
                 protect_top_k=protect_top_k,
                 expand_window=expand_window,
                 evidence_reranker=evidence_reranker,
-                validity_mode=validity_mode,
+                validity_mode=None,
             )
             rankings.append([result.memory_id for result in local_results])
             result_by_id.update({result.memory_id: result for result in local_results})
@@ -778,7 +810,16 @@ class ConvMemory:
                 result_by_id=result_by_id,
                 context_budget=int(context_budget),
             )
-        return self._rerank_with_new_positions(selected)
+        selected_results = self._rerank_with_new_positions(selected)
+        return self._maybe_apply_validity_module(
+            results=selected_results,
+            memory_ids=memory_ids,
+            memory_texts=memory_texts,
+            query=query,
+            validity_mode=validity_mode,
+            validity_source_map=validity_source_map,
+            target_limit=len(selected_results),
+        )
 
     def _resolve_evidence_reranker(self, evidence_reranker):
         message = "evidence_reranker must be None, 'v2', or an EvidenceReranker instance"
@@ -884,16 +925,22 @@ class ConvMemory:
         memory_texts,
         query,
         validity_mode,
+        validity_source_map,
+        target_limit,
     ):
         mode = self._resolve_validity_mode(validity_mode)
         if mode is None or not results:
             return results
         memories = self._validity_memories(memory_ids, memory_texts)
+        if target_limit is None:
+            target_limit = int(self._validity_module.config.candidate_top_k)
         return self._validity_module.apply(
             query=query,
             results=results,
             memories=memories,
             mode=mode,
+            source_evidence=validity_source_map,
+            target_limit=target_limit,
         )
 
     @staticmethod

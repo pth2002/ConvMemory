@@ -2,7 +2,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
-from typing import Callable, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 import numpy as np
 from sentence_transformers import CrossEncoder
@@ -42,6 +42,8 @@ class ValidityEvidenceConfig:
     mode_default: str = "context"
     source_policy: str = "top1"
     max_sources_per_candidate: int = 1
+    candidate_top_k: int = 10
+    require_later_source: bool = True
     context_threshold: float = 0.05
     demote_threshold: float = 0.35
     demote_score_scale: float = 1.0
@@ -89,6 +91,7 @@ class ValidityEvidenceModule:
         self.scorer = scorer
         self.device = device
         self.cross_encoder = cross_encoder
+        self._validate_config()
         if self.cross_encoder is None and self.config.cross_encoder_model:
             self.cross_encoder = CrossEncoder(
                 self.config.cross_encoder_model,
@@ -146,11 +149,19 @@ class ValidityEvidenceModule:
         results: Sequence[RerankResult],
         memories: Sequence[dict],
         mode: str = "context",
+        source_evidence: Optional[Mapping[str, object]] = None,
     ):
         mode = self._normalize_mode(mode)
         self._validate_memories(memories)
+        self._validate_source_evidence(source_evidence)
         memory_by_id = {str(memory.get("id", idx)): memory for idx, memory in enumerate(memories)}
-        top_sources = self._top_sources(query=query, results=results, memories=memories, memory_by_id=memory_by_id)
+        top_sources = self._top_sources(
+            query=query,
+            results=results,
+            memories=memories,
+            memory_by_id=memory_by_id,
+            source_evidence=source_evidence,
+        )
         annotations = []
         for result in results:
             target = memory_by_id.get(result.memory_id)
@@ -193,9 +204,22 @@ class ValidityEvidenceModule:
         results: Sequence[RerankResult],
         memories: Sequence[dict],
         mode: str = "context",
+        source_evidence: Optional[Mapping[str, object]] = None,
+        target_limit: Optional[int] = None,
     ):
         mode = self._normalize_mode(mode)
-        annotations = self.annotate(query=query, results=results, memories=memories, mode=mode)
+        results = list(results)
+        if target_limit is None:
+            target_limit = len(results)
+        target_limit = max(0, min(int(target_limit), len(results)))
+        active_results = results[:target_limit]
+        annotations = self.annotate(
+            query=query,
+            results=active_results,
+            memories=memories,
+            mode=mode,
+            source_evidence=source_evidence,
+        )
         copied = [
             RerankResult(
                 memory_id=result.memory_id,
@@ -205,10 +229,11 @@ class ValidityEvidenceModule:
                 text=result.text,
                 validity=annotation.to_dict(),
             )
-            for result, annotation in zip(results, annotations)
+            for result, annotation in zip(active_results, annotations)
         ]
+        tail = results[target_limit:]
         if mode == "context":
-            return copied
+            return [*copied, *tail]
 
         adjusted = []
         for result in copied:
@@ -228,7 +253,7 @@ class ValidityEvidenceModule:
                     validity=validity,
                 )
             )
-        return [
+        reranked_prefix = [
             RerankResult(
                 memory_id=result.memory_id,
                 score=result.score,
@@ -242,6 +267,7 @@ class ValidityEvidenceModule:
                 start=1,
             )
         ]
+        return [*reranked_prefix, *tail]
 
     def _top_sources(
         self,
@@ -250,6 +276,7 @@ class ValidityEvidenceModule:
         results: Sequence[RerankResult],
         memories: Sequence[dict],
         memory_by_id: dict,
+        source_evidence: Optional[Mapping[str, object]],
     ):
         pair_specs = []
         fallback = {}
@@ -257,12 +284,19 @@ class ValidityEvidenceModule:
             target = memory_by_id.get(result.memory_id)
             if target is None:
                 target = {"id": result.memory_id, "text": result.text or ""}
-            target_id = str(target.get("id", ""))
-            candidates = []
-            for memory in memories:
-                if str(memory.get("id", "")) == target_id:
-                    continue
-                candidates.append(memory)
+            if source_evidence is None:
+                candidates = self._select_source_candidates(
+                    query=query,
+                    target=target,
+                    memories=memories,
+                )
+            else:
+                candidates = self._provided_sources(
+                    target=target,
+                    source_evidence=source_evidence,
+                    memory_by_id=memory_by_id,
+                )
+            for memory in candidates:
                 pair_specs.append(
                     {
                         "result_id": result.memory_id,
@@ -285,6 +319,86 @@ class ValidityEvidenceModule:
             if current is None or float(score) > float(current[1]):
                 best[result_id] = (spec["source"], float(score))
         return best
+
+    def _select_source_candidates(self, *, query: str, target: dict, memories: Sequence[dict]):
+        policy = str(self.config.source_policy).lower().strip()
+        if policy not in {"top1", "topk"}:
+            raise ValueError("source_policy must be 'top1' or 'topk'")
+
+        eligible = [
+            memory
+            for memory in memories
+            if self._eligible_source(target=target, source=memory)
+        ]
+        limit = self._source_limit()
+        ranked = sorted(
+            enumerate(eligible),
+            key=lambda item: (
+                self._source_selection_score(query=query, target=target, source=item[1]),
+                self._position(item[1]) if self._position(item[1]) is not None else float("-inf"),
+                -item[0],
+            ),
+            reverse=True,
+        )
+        return [memory for _, memory in ranked[:limit]]
+
+    def _provided_sources(
+        self,
+        *,
+        target: dict,
+        source_evidence: Mapping[str, object],
+        memory_by_id: Mapping[str, dict],
+    ):
+        target_id = str(target.get("id", ""))
+        value = source_evidence.get(target_id)
+        if value is None:
+            return []
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        sources = []
+        for item in values:
+            if isinstance(item, str):
+                if item not in memory_by_id:
+                    raise ValueError(f"unknown validity source id '{item}'")
+                source = memory_by_id[item]
+            elif isinstance(item, Mapping):
+                source = dict(item)
+                if "text" not in source and "id" in source:
+                    source_id = str(source["id"])
+                    if source_id not in memory_by_id:
+                        raise ValueError(f"unknown validity source id '{source_id}'")
+                    source = memory_by_id[source_id]
+            else:
+                raise TypeError("validity source entries must be memory ids or mappings")
+            if "text" not in source:
+                raise ValueError("validity source must contain a 'text' field")
+            if self._eligible_source(target=target, source=source):
+                sources.append(source)
+        return sources[: self._source_limit()]
+
+    def _source_limit(self) -> int:
+        if str(self.config.source_policy).lower().strip() == "top1":
+            return 1
+        return int(self.config.max_sources_per_candidate)
+
+    def _eligible_source(self, *, target: dict, source: dict) -> bool:
+        if str(source.get("id", "")) == str(target.get("id", "")):
+            return False
+        if not bool(self.config.require_later_source):
+            return True
+        target_pos = self._position(target)
+        source_pos = self._position(source)
+        if target_pos is None or source_pos is None:
+            return True
+        return source_pos > target_pos
+
+    def _source_selection_score(self, *, query: str, target: dict, source: dict) -> float:
+        target_tokens = self._tokens(target.get("text", ""))
+        source_tokens = self._tokens(source.get("text", ""))
+        query_tokens = self._tokens(query)
+        return 0.8 * self._jaccard(source_tokens, target_tokens) + 0.2 * self._jaccard(
+            source_tokens,
+            query_tokens,
+        )
 
     def _score_source(self, *, query: str, target: dict, source: dict) -> float:
         return self._score_pair_batch([{"query": query, "target": target, "source": source}])[0]
@@ -417,9 +531,39 @@ class ValidityEvidenceModule:
                 field = sorted(blocked)[0]
                 raise ValueError(f"field '{field}' is not allowed at inference")
 
+    @classmethod
+    def _validate_source_evidence(cls, source_evidence):
+        if source_evidence is None:
+            return
+        if not isinstance(source_evidence, Mapping):
+            raise TypeError("source_evidence must map target ids to source memories")
+        for value in source_evidence.values():
+            values = value if isinstance(value, (list, tuple)) else [value]
+            for source in values:
+                if not isinstance(source, Mapping):
+                    continue
+                blocked = FORBIDDEN_FIELDS.intersection(source.keys())
+                if blocked:
+                    field = sorted(blocked)[0]
+                    raise ValueError(f"field '{field}' is not allowed at inference")
+
+    def _validate_config(self):
+        policy = str(self.config.source_policy).lower().strip()
+        if policy not in {"top1", "topk"}:
+            raise ValueError("source_policy must be 'top1' or 'topk'")
+        if int(self.config.max_sources_per_candidate) <= 0:
+            raise ValueError("max_sources_per_candidate must be positive")
+        if int(self.config.candidate_top_k) <= 0:
+            raise ValueError("candidate_top_k must be positive")
+
     @staticmethod
     def _tokens(text):
-        return set(re.findall(r"[a-zA-Z0-9_]+", str(text).lower()))
+        text = str(text).lower()
+        tokens = set(re.findall(r"[a-zA-Z0-9_]+", text))
+        cjk = re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", text)
+        tokens.update(cjk)
+        tokens.update("".join(cjk[idx : idx + 2]) for idx in range(len(cjk) - 1))
+        return tokens
 
     @staticmethod
     def _jaccard(left, right):

@@ -158,7 +158,15 @@ batched CrossEncoder scoring.
 Top-3/top-5 source aggregation is not the default policy because earlier v499,
 v502, and v503 runs showed that adding more sources can introduce false
 positive demotions. Full top-500 graph construction is also not the default
-path because learned graph errors can be amplified by propagation.
+path because learned graph errors can be amplified by propagation. The
+integrated API protects the requested result prefix and selects at
+most one later source per target with a cheap lexical rule. Applications with a
+dedicated update index should pass that result through `validity_source_map`.
+
+The package latency below measures the validity scorer on already selected
+source/query pairs. It does not include application-specific evidence-index
+lookup. The bounded in-package fallback avoids unbounded all-pairs CrossEncoder
+scoring, but its cheap source-selection work remains part of end-to-end latency.
 
 ## Source-Of-Truth Ledger
 
