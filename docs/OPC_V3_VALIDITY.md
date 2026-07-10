@@ -47,7 +47,8 @@ the retrieved order and adds structured validity metadata. `validity_mode="demot
 is explicit opt-in and should be used only for current-state/update workloads.
 Pass the selected update for each target through `validity_source_map` when an
 OPC memory index already tracks revisions. This avoids searching every memory
-pair and keeps one scorer call per protected target.
+pair and keeps one scorer call per protected target. This integrated source-map
+interface requires `convmemory>=0.6.2`.
 
 ## Selected Recipe
 

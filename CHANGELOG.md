@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2 - 2026-07-10
+
+- Added `validity_source_map` so applications can pass one selected update
+  source per target directly into the v3 context/demotion path.
+- Replaced unbounded validity pair scoring with a bounded top-1 source policy;
+  the built-in fallback now scores at most one source per protected target.
+- Limited integrated validity processing to the requested result prefix and
+  made `demote` preserve that top-k candidate set by construction.
+- Applied validity after final context expansion so every selected context item
+  follows the same annotation/demotion contract.
+- Added later-source validation, Chinese-aware lexical fallback features, and
+  package tests for source budgets, explicit evidence, and top-k preservation.
+
 ## 0.6.1 - 2026-07-03
 
 - Added `OPCConvMemory`, an OPC-style Chinese ConvMemory student that keeps the

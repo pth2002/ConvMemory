@@ -45,6 +45,7 @@ The representative v3 validity checkpoint is exported by the v557 recipe:
 | Max length | `192` |
 | Source policy | `top1` |
 | Default mode | `context` |
+| Package for bounded source integration | `convmemory>=0.6.2` |
 | Hub repository | `Purdy0228/ConvMemory-v3-Validity-Context` |
 | Checkpoint upload commit | `0883a43fe6df608030ebe9ec29286280e83c857c` |
 | `cross_encoder/model.safetensors` SHA256 | `446ee0cf6df4a8967e1a78c46d2ff3a2d777de65efbf475d2278d99468faa8d9` |

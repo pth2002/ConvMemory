@@ -26,7 +26,7 @@ reranker. Its intended use is recall-oriented memory selection for structured
 memory streams: conversations, user histories, agent traces, task logs, and
 session-level notes.
 
-Current package version: `0.6.1`
+Current package version: `0.6.2`
 
 ## When To Use It
 
