@@ -212,16 +212,24 @@ Keep your store, add the layer. Examples in [`examples/integrations/`](https://g
 
 ## Benchmark it on your own data
 
-Before trusting anyone's numbers, including these, run it on your memories:
-
 ```bash
 convmemory benchmark --queries queries.jsonl --memories memories.jsonl
 ```
 
-It reports Recall@k, MRR and latency before and after ConvMemory on your data.
-See [docs/BENCHMARK_CLI.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARK_CLI.md) for the file format. If it
-does not help on your data, that is a useful result — please open an issue with
-what you saw.
+Reports Recall@k, MRR and latency before and after ConvMemory on your memories,
+and writes a `--json` summary that is easy to paste into an issue.
+See [docs/BENCHMARK_CLI.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARK_CLI.md) for the file format.
+
+**Read the "before" row carefully.** It is cosine similarity in *this
+checkpoint's* MPNet space, not your production retriever. If you retrieve with a
+stronger embedding model, your real baseline is higher than that row and the
+delta the tool prints is larger than what you would actually gain. The question
+it answers is "how much does the reranker add on top of the space it scores in",
+not "should I replace my retriever". It also needs labelled `gold_ids` per
+query, which many memory systems do not have lying around.
+
+If it does not help on your data, that is a useful result — please open an issue
+with what you saw.
 
 ## More layers
 

@@ -1,7 +1,6 @@
 # `convmemory benchmark`
 
-Measure what ConvMemory does to *your* retrieval, on *your* memories, before
-deciding whether to keep it.
+Measure what ConvMemory does to *your* memories, without writing an eval harness.
 
 ```bash
 pip install "convmemory[encode]"
@@ -9,6 +8,24 @@ convmemory benchmark --queries queries.jsonl --memories memories.jsonl
 ```
 
 The CLI encodes your memory texts, so it needs the `[encode]` extra.
+
+## What it answers, and what it does not
+
+**Answers:** how much the reranker adds on top of dense retrieval *in the
+checkpoint's own embedding space*, on your memories, at what latency cost.
+
+**Does not answer:** whether adopting ConvMemory would improve your production
+retrieval. The "before" row is cosine similarity in the loaded checkpoint's
+embedding space (`all-mpnet-base-v2` for the released v1 checkpoint), because
+that is the space ConvMemory scores in. If you retrieve with a stronger
+embedding model, your real baseline is higher than that row and your real gain
+is smaller than the delta this tool prints. The weaker the baseline, the better
+the delta looks — so read it as a lower bound on the baseline, not an estimate
+of your gain.
+
+**Also required:** labelled `gold_ids` for each query. Many memory systems do
+not have an annotated evaluation set; without one this tool cannot tell you
+anything, and that is a real limitation rather than an oversight.
 
 From a source checkout without reinstalling, use the module form:
 
@@ -56,7 +73,7 @@ indexed 419 memories in 0.8s (one-off, not counted in per-query latency)
 
 query encoding (shared by both paths): 7.97 ms/query
 
-Before ConvMemory (dense only)
+Before ConvMemory (dense only, sentence-transformers/all-mpnet-base-v2)
   Recall@5   0.3069     Hit@5   0.4167
   Recall@10  0.4431     Hit@10  0.5833
   MRR       0.3011
@@ -73,16 +90,17 @@ Delta
   Recall@10    0.4431  ->  0.6764   (+0.2333)  better
   MRR          0.3011  ->  0.4929   (+0.1918)  better
   Latency      0.26 ms  ->  15.09 ms
+
+How to read this: the 'before' row is cosine similarity in
+sentence-transformers/all-mpnet-base-v2, not your production retriever. ...
 ```
 
 That run is a single held-out LoCoMo conversation on an RTX 4060 Laptop, shown
 so you can compare shapes, not as a benchmark claim.
 
-The "before" path is cosine similarity in the checkpoint's own embedding space,
-so both rows use the same encoder and the only difference is the reranker. If
-your production retriever is a different (usually stronger) embedding model,
-the "before" row here is not your production baseline — retrain or compare
-against your own retriever before drawing conclusions.
+Both rows use the same encoder, so the only difference between them is the
+reranker. See "What it answers, and what it does not" above before quoting the
+delta anywhere.
 
 ## Options
 

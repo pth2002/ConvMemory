@@ -5,6 +5,12 @@
 Runs your own memory store through dense retrieval and through dense +
 ConvMemory, and prints Recall@k, MRR and latency for both. The point is that you
 do not have to trust the numbers in the README.
+
+Scope: the "before" row is cosine similarity in the loaded checkpoint's own
+embedding space, because that is the space ConvMemory can score in. It is not a
+stand-in for a production retriever built on a stronger embedding model. Read
+the result as "what the reranker adds on top of this space", not as "what I
+would gain by adopting it".
 """
 
 from __future__ import annotations
@@ -200,8 +206,11 @@ def run_benchmark(args) -> int:
     dense_summary = dense_acc.summary()
     conv_summary = conv_acc.summary()
 
+    embedding_space = getattr(model, "embedding_model_name", None) or "the checkpoint's embedding space"
     print(f"\nquery encoding (shared by both paths): {encode_seconds / n * 1000:.2f} ms/query")
-    _print_block("Before ConvMemory (dense only)", dense_summary, ks, dense_seconds / n)
+    _print_block(
+        f"Before ConvMemory (dense only, {embedding_space})", dense_summary, ks, dense_seconds / n
+    )
     _print_block("After ConvMemory", conv_summary, ks, conv_seconds / n)
 
     print("\nDelta")
@@ -211,6 +220,13 @@ def run_benchmark(args) -> int:
     print(
         f"  {'Latency':<12} {dense_seconds / n * 1000:.2f} ms  ->  "
         f"{conv_seconds / n * 1000:.2f} ms"
+    )
+
+    print(
+        f"\nHow to read this: the 'before' row is cosine similarity in {embedding_space},"
+        "\nnot your production retriever. If you retrieve with a stronger embedding model,"
+        "\nyour real baseline is higher than that row and your real gain is smaller than the"
+        "\ndelta above. This measures what the reranker adds on top of the space it scores in."
     )
 
     if min(pool_sizes) < 100:
@@ -223,6 +239,12 @@ def run_benchmark(args) -> int:
         payload = {
             "checkpoint": args.checkpoint,
             "device": args.device,
+            "baseline_embedding_space": embedding_space,
+            "baseline_caveat": (
+                "The 'before' row is cosine similarity in the checkpoint's own embedding "
+                "space, not the reporter's production retriever. A stronger production "
+                "retriever means a higher real baseline and a smaller real gain."
+            ),
             "queries": len(queries),
             "memory_groups": len(groups),
             "pool_size_min": min(pool_sizes),
