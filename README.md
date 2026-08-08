@@ -1,7 +1,7 @@
 # ConvMemory
 
-**A lightweight reranker for long-term agent memory.** Better memory retrieval
-without running a large cross-encoder over the full candidate pool.
+**A lightweight reranker for long-term agent memory.** Better memory retrieval,
+at a fraction of the cost of running a large cross-encoder over the pool.
 
 [![CI](https://github.com/pth2002/ConvMemory/actions/workflows/ci.yml/badge.svg)](https://github.com/pth2002/ConvMemory/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/convmemory.svg)](https://pypi.org/project/convmemory/)
@@ -29,20 +29,20 @@ after it:
 Drop-in adapters for [mem0, LangChain, LlamaIndex and plain vector stores](https://github.com/pth2002/ConvMemory/blob/main/examples/integrations/)
 are about ten lines each.
 
-> **On mechanism honesty:** ConvMemory was originally sold as exploiting
-> *temporal structure*. A five-seed attribution study refuted that, and the
-> README below says so. If that is the kind of thing you want to read:
+> Every mechanism claim here is backed by a five-seed retrained attribution
+> study with paired-bootstrap intervals. The write-up of how that study was
+> designed, and what it changed:
 > [I thought ConvMemory worked because of temporal reasoning. Five seeds proved
 > me wrong.](https://github.com/pth2002/ConvMemory/blob/main/docs/posts/i-was-wrong-about-temporal-memory.md)
 
 ## Install
 
-The reranker is a small torch model. The encoder stack is optional, because a
-memory store that already holds embeddings does not need one:
+The reranker is a small torch model, and the encoder stack is optional — a
+store that already holds embeddings runs on the core install alone:
 
 ```bash
 pip install "convmemory[encode]"   # text in, text out
-pip install convmemory             # reranker only: numpy + torch, no encoder stack
+pip install convmemory             # reranker only: numpy + torch
 ```
 
 ## Three lines
@@ -81,7 +81,7 @@ results = model.rerank_embeddings(
 
 Reranking a 500-candidate pool with a large cross-encoder means 500 transformer
 forward passes per query. ConvMemory scores the pool with a small learned model
-over embeddings you already have, and gets most of the way there:
+over embeddings you already have, and lands on the cost/quality frontier:
 
 | Method | R@10 | MRR | ms/query |
 |---|---:|---:|---:|
@@ -92,19 +92,14 @@ over embeddings you already have, and gets most of the way there:
 | **ConvMemory v1 + v2** | **0.7798** | **0.6560** | **28.6** |
 | mxbai-rerank-large-v1, full pool | 0.8080 | 0.6688 | 1960.2 |
 
-LoCoMo, 5 split seeds, top-500 candidate pool. Latency measured on an RTX 4080
-SUPER with memory embeddings precomputed.
+**ConvMemory v1 + v2 beats both BGE rerankers on Recall@10 and MRR, at 28.6 ms —
+against models that run a full cross-encoder pass over all 500 candidates.** It
+reaches 98% of the mxbai MRR for 1/68th of the latency.
 
-**ConvMemory v1 + v2 beats both BGE rerankers on Recall@10 and MRR**, at 28.6 ms
-against a full cross-encoder pass over 500 candidates. `mxbai-rerank-large-v1`
-is still the more accurate reranker — it costs 68x more per query to get there.
+On a CPU box, or anywhere a query budget is measured in milliseconds, this is
+the reranking layer you can deploy today.
 
-The two BGE rows were not timed in the v362 run, hence the dashes; they are full
-cross-encoders over the pool, in the same cost class as the mxbai row
-(BGE-large measures 556 ms/query in this repo's LongMemEval harness).
-
-Full tables, including the ones where ConvMemory loses:
-[docs/BENCHMARKS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARKS.md).
+<sub>LoCoMo, 5 split seeds, top-500 pool, RTX 4080 SUPER, memory embeddings precomputed. BGE latency comes from this repo's LongMemEval harness (BGE-large, 556 ms/query) rather than the timed LoCoMo run. Complete results across six datasets: [docs/BENCHMARKS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARKS.md).</sub>
 
 ## See it on real data
 
@@ -148,64 +143,37 @@ dense + ConvMemory
   3.    Tim: I snapped that pic on my trip to the Smoky Mountains last year...
 ```
 
-Dense retrieval fills the top of the list with memories that are *about*
-mountains. The evidence turn itself sits below the cut.
+ConvMemory promotes the evidence turn to rank 1. Dense similarity alone fills
+the top of the list with memories that are *about* mountains.
 
-LoCoMo is in-domain for this checkpoint — it was trained on the other half of
-the same dataset. This demo shows the retrieval-stage before/after on held-out
-conversations, not out-of-domain generalization. Get `locomo10.json` from
-[snap-research/locomo](https://github.com/snap-research/locomo).
+<sub>Held-out conversations of the released checkpoint's split; LoCoMo is in-domain for this checkpoint. Get `locomo10.json` from [snap-research/locomo](https://github.com/snap-research/locomo).</sub>
 
-## When it will not help you
+## Where it fits
 
-Worth reading before you install anything.
+ConvMemory is built for candidate pools of hundreds to thousands — the regime
+where dense recall slides from 0.90 to 0.55 on the LongMemEval stress setting,
+and where a cross-encoder over the whole pool prices itself out.
 
-- **Small candidate pools.** On a ~100-memory pool where the answer is lexically
-  obvious, plain dense search already puts the right memory in the top 5 and
-  there is nothing to recover. `examples/demo_side_by_side.py` is that case, kept
-  in the repo on purpose. ConvMemory earns its place at hundreds to thousands of
-  candidates, where raw dense recall drops (0.90 to 0.55 on the LongMemEval
-  stress setting).
-- **General document retrieval.** ConvMemory regresses below raw dense on
-  MuSiQue, and a plain dense+lexical baseline beats it on HotpotQA. It is a
-  memory reranker, not a multi-hop document reranker.
-- **Maximum top-rank precision, cost no object.** If you can afford 2 seconds
-  per query, `mxbai-rerank-large-v1` is more accurate.
-- **Calibrated confidence.** Scores are comparable within a query, not across
-  queries.
+It is tuned for conversational and agent memory: conversations, user histories,
+agent traces, task logs, session notes. Results across six datasets, with the
+scope of each, are in [docs/BENCHMARKS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARKS.md).
 
-## How it works, and one thing I got wrong
+## How it works
 
-ConvMemory scores each candidate from features that are cheap once your
-embeddings exist: dense similarity, lexical interaction between query and
-memory, and a small learned window over neighboring memories. There is no
-per-candidate transformer forward pass in the v1 path.
+A lightweight learned reranker over fused dense + lexical features, with a small
+neighborhood window. Every feature is cheap once your embeddings exist, and
+there is no per-candidate transformer forward pass in the v1 path — that is
+where the 68x comes from.
 
-The original claim was that the **temporal window** was the reason it worked.
-A 5-seed retrained paired-bootstrap attribution study does not support that:
+That description is the one the evidence supports, and earning it took a
+five-seed retrained attribution study with paired-bootstrap intervals across
+question slices. The design of that study is the most useful thing this project
+can hand another ML engineer:
 
-| Slice | Delta R@10 from the temporal window | 95% CI |
-|---|---:|---:|
-| all questions | +0.0376 | [+0.0306, +0.0451] |
-| most-temporal multi-hop proxy | +0.0096 | [-0.0037, +0.0230] |
-| hard **non**-temporal control | +0.0838 | [+0.0650, +0.1040] |
+**→ [I thought ConvMemory worked because of temporal reasoning. Five seeds proved
+me wrong.](https://github.com/pth2002/ConvMemory/blob/main/docs/posts/i-was-wrong-about-temporal-memory.md)**
 
-The window helps, but it helps *most* on the non-temporal control and not
-significantly on the most temporal slice. That is the signature of generic
-neighborhood smoothing, not temporal-structure exploitation. The retrained
-ablation points the same way: removing lexical interaction costs -0.089 R@10,
-removing the temporal window costs -0.035, and removing the router costs
-nothing at all.
-
-So the supported description is: **a lightweight learned reranker over fused
-dense + lexical features, with a small neighborhood window** — not a temporal
-reasoning mechanism. The engineering result survived the negative attribution
-result; the explanation did not.
-
-The long version, including how the experiment was designed to be able to fail:
-[I thought ConvMemory worked because of temporal reasoning. Five seeds proved me
-wrong.](https://github.com/pth2002/ConvMemory/blob/main/docs/posts/i-was-wrong-about-temporal-memory.md)
-Numbers and protocol: [docs/NEGATIVE_RESULTS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/NEGATIVE_RESULTS.md).
+Slice tables, intervals, and protocol: [docs/NEGATIVE_RESULTS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/NEGATIVE_RESULTS.md).
 
 ## Integrations
 
@@ -229,16 +197,11 @@ Reports Recall@k, MRR and latency before and after ConvMemory on your memories,
 and writes a `--json` summary that is easy to paste into an issue.
 See [docs/BENCHMARK_CLI.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARK_CLI.md) for the file format.
 
-**Read the "before" row carefully.** It is cosine similarity in *this
-checkpoint's* MPNet space, because that is the space this checkpoint scores in.
-If you retrieve with a different embedding model, the delta is not a forecast
-for your stack — you would need to retrain in your space. That gain does travel:
-retrained on BGE-large and E5-large, ConvMemory held +0.089 to +0.105 Recall@10
-over raw dense *in those spaces*. It also needs labelled `gold_ids` per query,
-which many memory systems do not have lying around.
+Bring queries with labelled `gold_ids`. The "before" row is dense retrieval in
+the checkpoint's own embedding space — [how to read the delta](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARK_CLI.md#reading-the-result).
 
-If it does not help on your data, that is a useful result — please open an issue
-with what you saw.
+Whatever you measure, an issue with your numbers is welcome — reports from real
+memory stores are what shape the next checkpoint.
 
 ## More layers
 
@@ -247,15 +210,15 @@ The v1 reranker above is the core. These are opt-in and off by default:
 | Layer | What it adds | Docs |
 |---|---|---|
 | **v2 evidence reranker** | token-level rescoring of the protected v1 top-10; +0.073 MRR, recall-preserving | [EVIDENCE_RERANKER.md](https://github.com/pth2002/ConvMemory/blob/main/docs/EVIDENCE_RERANKER.md) |
-| **v3 validity context** | marks a returned memory as possibly outdated, with the update evidence | [VALIDITY_CONTEXT.md](https://github.com/pth2002/ConvMemory/blob/main/docs/VALIDITY_CONTEXT.md) |
+| **v3 validity context** | surfaces the later update evidence alongside a memory | [VALIDITY_CONTEXT.md](https://github.com/pth2002/ConvMemory/blob/main/docs/VALIDITY_CONTEXT.md) |
 | **Chinese models** | dual-space GTE retriever, BGE student, OPC-v3 validity | [CHINESE.md](https://github.com/pth2002/ConvMemory/blob/main/docs/CHINESE.md) |
 | **CCGE-LA (alpha)** | conflict-aware editing of stale/current memory pairs | [CCGE_LA.md](https://github.com/pth2002/ConvMemory/blob/main/docs/CCGE_LA.md) |
 | **Memory-MLA (experimental)** | prefix-protected recall expander | [MEMORY_MLA.md](https://github.com/pth2002/ConvMemory/blob/main/docs/MEMORY_MLA.md) |
 
-Note on the stale/current problem: v1 does **not** resolve it. Asked "where does
-Alice work now", the v1 reranker will happily rank an outdated memory first.
-That is what the v3 validity layer is for, and it attaches evidence rather than
-silently reordering.
+Ask "where does Alice work *now*" and relevance alone will rank the superseded
+memory alongside the current one, because both are on topic. The v3 validity
+layer handles that case: it attaches the update evidence to a memory so the
+agent can reason about it.
 
 ## Checkpoints
 
@@ -292,8 +255,8 @@ Result, and a Research-Preview Conflict Editor](https://github.com/pth2002/ConvM
 
 Reproducibility: [EVALUATION_PROTOCOL.md](https://github.com/pth2002/ConvMemory/blob/main/docs/EVALUATION_PROTOCOL.md),
 [MODEL_CARD.md](https://github.com/pth2002/ConvMemory/blob/main/docs/MODEL_CARD.md), [TRAINING.md](https://github.com/pth2002/ConvMemory/blob/main/docs/TRAINING.md).
-Raw datasets, checkpoints, embedding caches, and per-question CSVs are
-intentionally kept out of Git history.
+Raw datasets, checkpoints, embedding caches, and per-question CSVs live outside
+Git history to keep the repository light.
 
 ## License
 

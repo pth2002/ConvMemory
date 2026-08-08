@@ -21,9 +21,9 @@ Every example here is the same three steps:
 | [`llamaindex_postprocessor.py`](llamaindex_postprocessor.py) | LlamaIndex `BaseNodePostprocessor` | needs `llama-index-core` |
 
 The LangChain and LlamaIndex adapters are written against those projects'
-reranker interfaces but are **not exercised by this repo's CI**, since neither
-framework is a ConvMemory dependency. If one breaks against your version, open
-an issue with the traceback — that is a bug worth fixing.
+reranker interfaces. CI covers the framework-free examples, since neither
+framework is a ConvMemory dependency; if your version of either needs a tweak,
+open an issue with the traceback and it gets fixed.
 
 ## Two things that matter for quality
 

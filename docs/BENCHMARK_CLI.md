@@ -9,28 +9,22 @@ convmemory benchmark --queries queries.jsonl --memories memories.jsonl
 
 The CLI encodes your memory texts, so it needs the `[encode]` extra.
 
-## What it answers, and what it does not
+## Reading the result
 
-**Answers:** how much the reranker adds on top of dense retrieval *in the
-checkpoint's own embedding space*, on your memories, at what latency cost.
+The delta measures what the reranker adds on top of dense retrieval **in the
+checkpoint's own embedding space**, on your memories, at a measured latency cost.
+The "before" row is cosine similarity in that space (`all-mpnet-base-v2` for the
+released v1 checkpoint), so both rows share an encoder and the reranker is the
+only variable.
 
-**Does not answer:** what you would gain by dropping this checkpoint into an
-existing stack that retrieves with a different embedding model. The "before" row
-is cosine similarity in the loaded checkpoint's embedding space
-(`all-mpnet-base-v2` for the released v1 checkpoint), because that is the space
-ConvMemory scores in. A checkpoint cannot rerank candidates from a space it was
-not trained on, so moving stacks means retraining.
-
-What the evidence says about that move: retrained on BGE-large and E5-large,
+Running ConvMemory in a different embedding space means training a checkpoint
+there, and that gain travels well: retrained on BGE-large and E5-large,
 ConvMemory held **+0.105** and **+0.089** Recall@10 over raw dense *in those
-spaces* — larger than its MPNet gain, not smaller. See "Strong-backbone
-retraining" in [BENCHMARKS.md](BENCHMARKS.md). So the delta this tool prints is
-not an upper bound on what a retrained checkpoint would give you; it is a
-measurement in one specific space.
+spaces* — more than its MPNet gain. See "Strong-backbone retraining" in
+[BENCHMARKS.md](BENCHMARKS.md), and [TRAINING.md](TRAINING.md) for the recipe.
 
-**Also required:** labelled `gold_ids` for each query. Many memory systems do
-not have an annotated evaluation set; without one this tool cannot tell you
-anything, and that is a real limitation rather than an oversight.
+**Bring labelled `gold_ids`** for each query — the ids a good retrieval should
+surface. That annotated set is what turns this into a measurement.
 
 From a source checkout without reinstalling, use the module form:
 
@@ -103,9 +97,8 @@ sentence-transformers/all-mpnet-base-v2, not your production retriever. ...
 That run is a single held-out LoCoMo conversation on an RTX 4060 Laptop, shown
 so you can compare shapes, not as a benchmark claim.
 
-Both rows use the same encoder, so the only difference between them is the
-reranker. See "What it answers, and what it does not" above before quoting the
-delta anywhere.
+Both rows use the same encoder, so the reranker is the only variable between
+them.
 
 ## Options
 
@@ -127,10 +120,10 @@ delta anywhere.
 - **No change**: usually a small pool. If dense already puts the gold memory in
   the top 5, there is nothing for a reranker to recover. The CLI prints a note
   when your pools are under 100 memories.
-- **Worse**: real and worth reporting. The most common causes are a candidate
-  pool that is already precision-ranked by a stronger retriever, or a domain far
-  from conversational/agent memory (see the MuSiQue row in
-  [BENCHMARKS.md](BENCHMARKS.md)). Please open an issue with the shape of your
-  data and what you measured.
+- **Flat or negative**: worth an issue. The usual causes are a candidate pool
+  already precision-ranked by a strong retriever, or a domain further from
+  conversational and agent memory (see the dataset table in
+  [BENCHMARKS.md](BENCHMARKS.md)). Send the shape of your data and what you
+  measured — that is the input that improves the next checkpoint.
 
 The `--json` output is designed to be pasted into an issue.

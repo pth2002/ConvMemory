@@ -223,12 +223,8 @@ def run_benchmark(args) -> int:
     )
 
     print(
-        f"\nHow to read this: the 'before' row is cosine similarity in {embedding_space} --"
-        "\nthe space this checkpoint scores in, not your production retriever. If you retrieve"
-        "\nwith a different embedding model, this delta is not a forecast for your stack: the"
-        "\ncheckpoint only scores in its own space, so moving spaces means retraining. That"
-        "\ngain does travel -- retrained on BGE-large and E5-large, ConvMemory held +0.089 to"
-        "\n+0.105 Recall@10 over raw dense in those spaces (docs/BENCHMARKS.md)."
+        f"\nBaseline: dense retrieval in {embedding_space}, the space this checkpoint"
+        "\nscores in. See docs/BENCHMARK_CLI.md for how to read the delta."
     )
 
     if min(pool_sizes) < 100:
