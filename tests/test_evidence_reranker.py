@@ -133,7 +133,7 @@ def test_evidence_reranker_recall_preserving(device):
 def test_evidence_reranker_save_load_roundtrip(monkeypatch, tmp_checkpoint_dir):
     import convmemory.evidence_reranker as evidence_module
 
-    monkeypatch.setattr(evidence_module, "CrossEncoder", FakeCrossEncoder)
+    monkeypatch.setattr(evidence_module, "load_cross_encoder", lambda: FakeCrossEncoder)
     reranker = EvidenceReranker(
         EvidenceRerankerConfig(top_k=3, max_length=64),
         cross_encoder=FakeCrossEncoder(),

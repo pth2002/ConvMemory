@@ -5,8 +5,8 @@ import re
 from typing import Callable, Mapping, Optional, Sequence
 
 import numpy as np
-from sentence_transformers import CrossEncoder
 
+from ._optional import load_cross_encoder
 from .hub import resolve_checkpoint_path
 from .reranker import RerankResult
 
@@ -93,7 +93,7 @@ class ValidityEvidenceModule:
         self.cross_encoder = cross_encoder
         self._validate_config()
         if self.cross_encoder is None and self.config.cross_encoder_model:
-            self.cross_encoder = CrossEncoder(
+            self.cross_encoder = load_cross_encoder()(
                 self.config.cross_encoder_model,
                 num_labels=int(self.config.cross_encoder_num_labels),
                 max_length=int(self.config.max_length),
@@ -127,14 +127,14 @@ class ValidityEvidenceModule:
         model_path = path / "cross_encoder"
         cross_encoder = None
         if model_path.exists():
-            cross_encoder = CrossEncoder(
+            cross_encoder = load_cross_encoder()(
                 str(model_path),
                 num_labels=int(config.cross_encoder_num_labels),
                 max_length=int(config.max_length),
                 device=device,
             )
         elif config.cross_encoder_model:
-            cross_encoder = CrossEncoder(
+            cross_encoder = load_cross_encoder()(
                 config.cross_encoder_model,
                 num_labels=int(config.cross_encoder_num_labels),
                 max_length=int(config.max_length),

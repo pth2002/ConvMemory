@@ -13,8 +13,8 @@ from typing import Iterable, Optional
 
 import numpy as np
 import torch
-from sentence_transformers import SentenceTransformer
 
+from ._optional import load_sentence_transformer
 from .encoder import MixerConvMemoryEncoder
 from .hub import resolve_checkpoint_path
 from .reranker import RerankResult, normalize_rows, sliding_windows, window_tensor
@@ -100,12 +100,13 @@ class DualSpaceTextEncoder:
         self.tuned_model_name = str(tuned_model)
         self.device = device
         self.batch_size = int(batch_size)
-        self.base = SentenceTransformer(
+        sentence_transformer = load_sentence_transformer()
+        self.base = sentence_transformer(
             self.base_model_name,
             device=device,
             trust_remote_code=trust_remote_code,
         )
-        self.tuned = SentenceTransformer(
+        self.tuned = sentence_transformer(
             self.tuned_model_name,
             device=device,
             trust_remote_code=trust_remote_code,
@@ -145,7 +146,7 @@ class SingleSpaceTextEncoder:
         self.model_name = str(model_name)
         self.device = device
         self.batch_size = int(batch_size)
-        self.model = SentenceTransformer(
+        self.model = load_sentence_transformer()(
             self.model_name,
             device=device,
             trust_remote_code=trust_remote_code,

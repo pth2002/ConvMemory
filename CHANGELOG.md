@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0 - 2026-08-09
+
+- Added a `convmemory benchmark` CLI that measures Recall@k, MRR and latency
+  before and after ConvMemory on a user's own JSONL memories and queries, with
+  per-group candidate pools for multi-tenant stores and a `--json` summary.
+- **Breaking:** the encoder stack is now optional. `pip install convmemory`
+  installs numpy + torch only, which is enough for `rerank_embeddings(...)` on a
+  store that already holds embeddings. Text-in/text-out paths (`rerank`,
+  `encode`, `from_pretrained` with an embedding model, the v2 evidence reranker,
+  the v3 validity module, and `ChineseConvMemory`/`OPCConvMemory`) now require
+  `pip install "convmemory[encode]"`, and raise an `ImportError` naming that
+  command if it is missing. `sentence_transformers` is imported lazily, so
+  `import convmemory` no longer loads torch's transformer stack: 6.4s -> 1.8s.
+- Dropped `scikit-learn` and `tqdm` from the package's runtime dependencies;
+  neither is imported by `convmemory/`. They remain in `requirements.txt` for
+  the research scripts under `experiments/`. Note this does not shrink a
+  `[encode]` install, since `sentence-transformers` depends on them itself.
+- Rewrote the README around installation and use rather than research history.
+  Full evaluation tables moved to `docs/BENCHMARKS.md`, Chinese models to
+  `docs/CHINESE.md`; README links are now absolute so they resolve on PyPI.
+- Added runnable examples: a held-out LoCoMo before/after demo
+  (`examples/demo_locomo.py`), a small-pool demo showing where ConvMemory does
+  not help, and integration adapters for vector stores, LangChain, LlamaIndex,
+  mem0, and a plain agent loop.
+- No model, checkpoint, or ranking behaviour changed in this release.
+
 ## 0.6.2 - 2026-07-10
 
 - Added `validity_source_map` so applications can pass one selected update

@@ -13,8 +13,8 @@ import re
 from typing import Mapping, Sequence
 
 import numpy as np
-from sentence_transformers import CrossEncoder
 
+from ._optional import load_cross_encoder
 from .hub import resolve_checkpoint_path
 
 
@@ -68,7 +68,7 @@ class EvidenceReranker:
         self.device = device
         self.cross_encoder = cross_encoder
         if self.cross_encoder is None:
-            self.cross_encoder = CrossEncoder(
+            self.cross_encoder = load_cross_encoder()(
                 self.config.cross_encoder_model,
                 num_labels=1,
                 max_length=int(self.config.max_length),
@@ -90,7 +90,7 @@ class EvidenceReranker:
         model_path = path / "cross_encoder"
         if not model_path.exists():
             model_path = path
-        cross_encoder = CrossEncoder(
+        cross_encoder = load_cross_encoder()(
             str(model_path),
             num_labels=1,
             max_length=int(config.max_length),

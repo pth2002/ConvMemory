@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "convmemory"
-version = "0.6.2"
-description = "Lightweight temporal memory reranking for long-term conversational memory."
+version = "0.7.0"
+description = "A lightweight reranker for long-term agent memory, without a large cross-encoder over the full candidate pool."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -25,14 +25,18 @@ classifiers = [
 dependencies = [
     "numpy>=1.24",
     "torch>=2.0",
-    "sentence-transformers>=2.2.0",
-    "transformers>=4.30",
-    "tqdm>=4.60",
-    "scikit-learn>=1.2",
 ]
 
+[project.scripts]
+convmemory = "convmemory.cli:main"
+
 [project.optional-dependencies]
+# Text in, text out. Needed by `rerank`, `encode`, `from_pretrained` with an
+# embedding model, and the optional v2/v3 cross-encoder stages. Not needed if
+# your store already holds embeddings and you call `rerank_embeddings`.
+encode = ["sentence-transformers>=2.2.0", "transformers>=4.30"]
 hub = ["huggingface_hub>=0.20"]
+all = ["sentence-transformers>=2.2.0", "transformers>=4.30", "huggingface_hub>=0.20"]
 
 [project.urls]
 Homepage = "https://github.com/pth2002/ConvMemory"

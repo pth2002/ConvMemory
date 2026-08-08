@@ -523,7 +523,7 @@ def test_validity_score_evidence_pairs_batches_explicit_pairs():
 def test_validity_cross_encoder_save_load_roundtrip(monkeypatch, tmp_checkpoint_dir):
     import convmemory.validity as validity_module
 
-    monkeypatch.setattr(validity_module, "CrossEncoder", FakeCrossEncoder)
+    monkeypatch.setattr(validity_module, "load_cross_encoder", lambda: FakeCrossEncoder)
     module = ValidityEvidenceModule(
         ValidityEvidenceConfig(cross_encoder_model="fake-model"),
         cross_encoder=FakeCrossEncoder(),

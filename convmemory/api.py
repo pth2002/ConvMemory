@@ -6,8 +6,8 @@ import warnings
 
 import numpy as np
 import torch
-from sentence_transformers import SentenceTransformer
 
+from ._optional import load_sentence_transformer
 from .ccge import CCGELowAmplitudeEditor, build_ccge_features
 from .evidence_reranker import EvidenceReranker
 from .hub import resolve_checkpoint_path
@@ -109,7 +109,7 @@ class ConvMemory:
         conv_model, scorer = build_default_components(device=device, **model_config)
         embedder = None
         if embedding_model:
-            embedder = SentenceTransformer(embedding_model, device=device)
+            embedder = load_sentence_transformer()(embedding_model, device=device)
         return cls(
             conv_model=conv_model,
             scorer=scorer,
@@ -158,7 +158,7 @@ class ConvMemory:
             embedding_model_name = metadata.get("embedding_model")
         embedder = None
         if embedding_model_name:
-            embedder = SentenceTransformer(embedding_model_name, device=device)
+            embedder = load_sentence_transformer()(embedding_model_name, device=device)
 
         ccge_editor = None
         ccge_path = path / "ccge_la.pt"
