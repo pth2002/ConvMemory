@@ -14,14 +14,19 @@ The CLI encodes your memory texts, so it needs the `[encode]` extra.
 **Answers:** how much the reranker adds on top of dense retrieval *in the
 checkpoint's own embedding space*, on your memories, at what latency cost.
 
-**Does not answer:** whether adopting ConvMemory would improve your production
-retrieval. The "before" row is cosine similarity in the loaded checkpoint's
-embedding space (`all-mpnet-base-v2` for the released v1 checkpoint), because
-that is the space ConvMemory scores in. If you retrieve with a stronger
-embedding model, your real baseline is higher than that row and your real gain
-is smaller than the delta this tool prints. The weaker the baseline, the better
-the delta looks — so read it as a lower bound on the baseline, not an estimate
-of your gain.
+**Does not answer:** what you would gain by dropping this checkpoint into an
+existing stack that retrieves with a different embedding model. The "before" row
+is cosine similarity in the loaded checkpoint's embedding space
+(`all-mpnet-base-v2` for the released v1 checkpoint), because that is the space
+ConvMemory scores in. A checkpoint cannot rerank candidates from a space it was
+not trained on, so moving stacks means retraining.
+
+What the evidence says about that move: retrained on BGE-large and E5-large,
+ConvMemory held **+0.105** and **+0.089** Recall@10 over raw dense *in those
+spaces* — larger than its MPNet gain, not smaller. See "Strong-backbone
+retraining" in [BENCHMARKS.md](BENCHMARKS.md). So the delta this tool prints is
+not an upper bound on what a retrained checkpoint would give you; it is a
+measurement in one specific space.
 
 **Also required:** labelled `gold_ids` for each query. Many memory systems do
 not have an annotated evaluation set; without one this tool cannot tell you

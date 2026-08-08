@@ -86,13 +86,22 @@ over embeddings you already have, and gets most of the way there:
 | Method | R@10 | MRR | ms/query |
 |---|---:|---:|---:|
 | raw dense (no reranker) | 0.5345 | 0.3254 | <1 |
-| **ConvMemory v1** | **0.7798** | **0.5824** | **16.8** |
+| BGE-reranker-base, full pool | 0.6967 | 0.5469 | — |
+| BGE-reranker-large, full pool | 0.7621 | 0.6120 | — |
+| **ConvMemory v1** | **0.7798** | 0.5824 | **16.8** |
 | **ConvMemory v1 + v2** | **0.7798** | **0.6560** | **28.6** |
 | mxbai-rerank-large-v1, full pool | 0.8080 | 0.6688 | 1960.2 |
 
 LoCoMo, 5 split seeds, top-500 candidate pool. Latency measured on an RTX 4080
-SUPER with memory embeddings precomputed. `mxbai-rerank-large-v1` is still the
-more accurate reranker — it costs 68x more per query to get there.
+SUPER with memory embeddings precomputed.
+
+**ConvMemory v1 + v2 beats both BGE rerankers on Recall@10 and MRR**, at 28.6 ms
+against a full cross-encoder pass over 500 candidates. `mxbai-rerank-large-v1`
+is still the more accurate reranker — it costs 68x more per query to get there.
+
+The two BGE rows were not timed in the v362 run, hence the dashes; they are full
+cross-encoders over the pool, in the same cost class as the mxbai row
+(BGE-large measures 556 ms/query in this repo's LongMemEval harness).
 
 Full tables, including the ones where ConvMemory loses:
 [docs/BENCHMARKS.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARKS.md).
@@ -221,12 +230,12 @@ and writes a `--json` summary that is easy to paste into an issue.
 See [docs/BENCHMARK_CLI.md](https://github.com/pth2002/ConvMemory/blob/main/docs/BENCHMARK_CLI.md) for the file format.
 
 **Read the "before" row carefully.** It is cosine similarity in *this
-checkpoint's* MPNet space, not your production retriever. If you retrieve with a
-stronger embedding model, your real baseline is higher than that row and the
-delta the tool prints is larger than what you would actually gain. The question
-it answers is "how much does the reranker add on top of the space it scores in",
-not "should I replace my retriever". It also needs labelled `gold_ids` per
-query, which many memory systems do not have lying around.
+checkpoint's* MPNet space, because that is the space this checkpoint scores in.
+If you retrieve with a different embedding model, the delta is not a forecast
+for your stack — you would need to retrain in your space. That gain does travel:
+retrained on BGE-large and E5-large, ConvMemory held +0.089 to +0.105 Recall@10
+over raw dense *in those spaces*. It also needs labelled `gold_ids` per query,
+which many memory systems do not have lying around.
 
 If it does not help on your data, that is a useful result — please open an issue
 with what you saw.

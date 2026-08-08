@@ -8,9 +8,9 @@ do not have to trust the numbers in the README.
 
 Scope: the "before" row is cosine similarity in the loaded checkpoint's own
 embedding space, because that is the space ConvMemory can score in. It is not a
-stand-in for a production retriever built on a stronger embedding model. Read
-the result as "what the reranker adds on top of this space", not as "what I
-would gain by adopting it".
+stand-in for a production retriever built on a different embedding model. Read
+the result as "what the reranker adds on top of this space"; carrying it to
+another space means retraining there.
 """
 
 from __future__ import annotations
@@ -223,10 +223,12 @@ def run_benchmark(args) -> int:
     )
 
     print(
-        f"\nHow to read this: the 'before' row is cosine similarity in {embedding_space},"
-        "\nnot your production retriever. If you retrieve with a stronger embedding model,"
-        "\nyour real baseline is higher than that row and your real gain is smaller than the"
-        "\ndelta above. This measures what the reranker adds on top of the space it scores in."
+        f"\nHow to read this: the 'before' row is cosine similarity in {embedding_space} --"
+        "\nthe space this checkpoint scores in, not your production retriever. If you retrieve"
+        "\nwith a different embedding model, this delta is not a forecast for your stack: the"
+        "\ncheckpoint only scores in its own space, so moving spaces means retraining. That"
+        "\ngain does travel -- retrained on BGE-large and E5-large, ConvMemory held +0.089 to"
+        "\n+0.105 Recall@10 over raw dense in those spaces (docs/BENCHMARKS.md)."
     )
 
     if min(pool_sizes) < 100:
@@ -242,8 +244,10 @@ def run_benchmark(args) -> int:
             "baseline_embedding_space": embedding_space,
             "baseline_caveat": (
                 "The 'before' row is cosine similarity in the checkpoint's own embedding "
-                "space, not the reporter's production retriever. A stronger production "
-                "retriever means a higher real baseline and a smaller real gain."
+                "space, not the reporter's production retriever. The released checkpoint "
+                "scores only in that space; using a different retriever requires retraining. "
+                "Retrained on BGE-large and E5-large, ConvMemory held +0.089 to +0.105 "
+                "Recall@10 over raw dense in those spaces."
             ),
             "queries": len(queries),
             "memory_groups": len(groups),
