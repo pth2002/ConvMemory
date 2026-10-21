@@ -17,6 +17,7 @@ shape of what `search` returned.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 from convmemory import ConvMemory
@@ -40,13 +41,33 @@ def _memory_text(record: dict) -> str:
     raise KeyError(f"no memory text field found in mem0 record: {sorted(record)}")
 
 
+def in_store_order(records: list[dict], order_key: str) -> list[dict]:
+    """Sort candidates back into write order before reranking.
+
+    ConvMemory's position feature and neighbor windows are defined over store
+    order, and mem0 returns candidates in similarity order. Records without
+    `order_key` are left as they are, with a warning.
+    """
+    keys = [record.get(order_key) for record in records]
+    if any(key is None for key in keys):
+        warnings.warn(
+            f"ConvMemory: some mem0 records have no '{order_key}', so candidates stay in "
+            "similarity order, which lowers reranking quality. Pass order_key= to fix.",
+            stacklevel=3,
+        )
+        return records
+    order = sorted(range(len(records)), key=lambda i: keys[i])
+    return [records[i] for i in order]
+
+
 class ConvMemoryReranked:
     """Thin wrapper: search wide with mem0, return a reranked short list."""
 
-    def __init__(self, mem0_client, reranker: ConvMemory, top_n: int = TOP_N):
+    def __init__(self, mem0_client, reranker: ConvMemory, top_n: int = TOP_N, order_key: str = "created_at"):
         self.mem0 = mem0_client
         self.reranker = reranker
         self.top_n = top_n
+        self.order_key = order_key
 
     @classmethod
     def from_pretrained(
@@ -55,13 +76,15 @@ class ConvMemoryReranked:
         checkpoint: str = "Purdy0228/ConvMemory-LoCoMo-MPNet",
         device: str = "cpu",
         top_n: int = TOP_N,
+        order_key: str = "created_at",
     ):
-        return cls(mem0_client, ConvMemory.from_pretrained(checkpoint, device=device), top_n)
+        return cls(mem0_client, ConvMemory.from_pretrained(checkpoint, device=device), top_n, order_key)
 
     def search(self, query: str, limit: int = CANDIDATE_LIMIT, **mem0_kwargs) -> list[dict]:
         records = _as_records(self.mem0.search(query=query, limit=limit, **mem0_kwargs))
         if not records:
             return []
+        records = in_store_order(records, self.order_key)
 
         memories = [
             {"id": str(record.get("id", index)), "text": _memory_text(record)}
@@ -89,9 +112,12 @@ if __name__ == "__main__":
         def search(self, query, limit, **kwargs):
             return {
                 "results": [
-                    {"id": "m1", "memory": "we moved the analytics store to ClickHouse", "score": 0.41},
-                    {"id": "m2", "memory": "the offsite is in Porto in May", "score": 0.38},
-                    {"id": "m3", "memory": "Postgres was the original analytics store", "score": 0.36},
+                    {"id": "m1", "memory": "we moved the analytics store to ClickHouse", "score": 0.41,
+                     "created_at": "2026-03-02T10:00:00"},
+                    {"id": "m2", "memory": "the offsite is in Porto in May", "score": 0.38,
+                     "created_at": "2026-02-11T09:30:00"},
+                    {"id": "m3", "memory": "Postgres was the original analytics store", "score": 0.36,
+                     "created_at": "2026-01-05T16:20:00"},
                 ]
             }
 
