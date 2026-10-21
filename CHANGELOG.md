@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- The README now passes the whole store plus `candidate_ids` /
+  `candidate_indices` instead of only the candidates. The released checkpoints
+  define their position feature and neighbor windows over store order, and a
+  candidate list in similarity order turns both into a copy of the dense rank.
+  On held-out LoCoMo with a 60-candidate pool, hit@10 is 718 of 937 with the
+  whole store and 679 with the candidates in rank order. Reported in issue #1.
+- The mem0, LangChain and LlamaIndex adapters sort retrieved candidates back
+  into store order by a `created_at` field (`order_key=` to change it) and warn
+  when it is missing.
+- Added `experiments/issue_1/`: the hand-off check above, plus a check of the
+  Chinese OPC student and of bge-m3's ColBERT and sparse heads as rerankers
+  over a bge-m3 top-60.
+- No model, checkpoint, or ranking behaviour changed.
+
 ## 0.7.0 - 2026-08-09
 
 - Added a `convmemory benchmark` CLI that measures Recall@k, MRR and latency

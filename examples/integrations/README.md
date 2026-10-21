@@ -27,10 +27,16 @@ open an issue with the traceback and it gets fixed.
 
 ## Two things that matter for quality
 
-**Pass memories in a stable order.** ConvMemory reads a small learned window
-over neighboring memories. If your retriever shuffles memories out of the order
-your store keeps them in, that signal is noise. Chronological insertion order is
-the natural choice for agent memory.
+**Pass the store, or at least store order.** ConvMemory's position feature and
+its neighbor windows are defined over the order your store keeps memories in.
+Best: pass the whole store plus the candidate positions, as
+`basic_vector_store.py` and `custom_agent.py` do. When a framework hands you only
+the retrieved candidates, sort them back into store order before reranking. The
+mem0, LangChain and LlamaIndex adapters do this with a `created_at` field by
+default (`order_key=` to change it) and warn when the field is missing. On
+held-out LoCoMo with a 60-candidate pool, hit@10 is 718 of 937 with the whole
+store, 705 with the candidates in store order, and 679 with the candidates in
+similarity order ([issue #1](https://github.com/pth2002/ConvMemory/issues/1)).
 
 **Reuse embeddings you already have.** `rerank(query, memories)` re-encodes the
 memory texts on every call, which dominates latency. If your store already keeps
@@ -45,7 +51,8 @@ ranked = model.rerank_embeddings(
     memory_ids=store_ids,
     memory_texts=store_texts,
     query=query,
-    candidate_indices=dense_top_200,     # optional: restrict to a candidate pool
+    candidate_indices=dense_top_200,     # store positions of your candidate pool
+    window_mode="candidate_local",       # windows only around the candidates
     top_k=10,
 )
 ```

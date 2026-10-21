@@ -51,11 +51,21 @@ pip install convmemory             # reranker only: numpy + torch
 from convmemory import ConvMemory
 
 model = ConvMemory.from_pretrained("Purdy0228/ConvMemory-LoCoMo-MPNet")
-results = model.rerank(query=query, memories=candidates, top_k=10)
+results = model.rerank(query=query, memories=store, candidate_ids=top_ids, top_k=10)
 ```
 
-`memories` is a list of `{"id": ..., "text": ...}` in the order your store keeps
-them. Each result carries `rank`, `memory_id`, `score`, and `text`.
+`memories` is your whole store as `{"id": ..., "text": ...}` in the order the
+store keeps it: write order for agent memory, file and chunk order for
+documents. `candidate_ids` are the ids your vector search returned. Each result
+carries `rank`, `memory_id`, `score`, and `text`.
+
+Pass the store, not only the candidates. ConvMemory's position feature and its
+neighbor windows are defined over the store, so a candidate list in similarity
+order turns them into a copy of the dense rank. On held-out LoCoMo with a
+60-candidate pool, hit@10 is 718 of 937 with the whole store, 705 with only the
+candidates re-sorted into store order, and 679 with the candidates in rank
+order ([issue #1](https://github.com/pth2002/ConvMemory/issues/1),
+[script](https://github.com/pth2002/ConvMemory/blob/main/experiments/issue_1/)).
 
 Already have embeddings? Then you never need the encoder — this is the path the
 core install is built for, and it is roughly 50x faster because nothing is
@@ -64,13 +74,19 @@ re-encoded:
 ```python
 results = model.rerank_embeddings(
     query_embedding=query_embedding,
-    memory_embeddings=memory_embeddings,   # what your store already has
+    memory_embeddings=memory_embeddings,   # the whole store, in store order
     memory_ids=memory_ids,
     memory_texts=memory_texts,
     query=query,
+    candidate_indices=top_indices,         # store positions of your dense top-k
+    window_mode="candidate_local",         # windows only around the candidates
     top_k=10,
 )
 ```
+
+`window_mode="candidate_local"` keeps the cost bounded by the candidate count
+on large stores. In the same LoCoMo check it matched the full-window result
+(716 vs 718 of 937) at 21 ms instead of 54 ms per query on CPU.
 
 ## Why ConvMemory?
 

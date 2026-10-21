@@ -17,6 +17,7 @@ traceback.
 
 from __future__ import annotations
 
+import warnings
 from typing import List, Optional
 
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -29,12 +30,15 @@ from convmemory import ConvMemory
 class ConvMemoryPostprocessor(BaseNodePostprocessor):
     """Reorder retrieved nodes with ConvMemory.
 
-    Node order is preserved into the reranker, so if your index returns nodes in
-    the order the memories were written, ConvMemory's window features see the
-    neighborhood structure they were trained on.
+    ConvMemory's position feature and neighbor windows are defined over the
+    order your store keeps memories in, while an index returns nodes in
+    similarity order. Nodes are sorted back by `metadata[order_key]` (write
+    time by default) before reranking. Without that field they stay in
+    similarity order, with a warning.
     """
 
     top_n: int = Field(default=10, description="how many nodes to keep")
+    order_key: str = Field(default="created_at", description="metadata field that gives store order")
 
     _reranker: ConvMemory = PrivateAttr()
 
@@ -44,9 +48,10 @@ class ConvMemoryPostprocessor(BaseNodePostprocessor):
         checkpoint: str = "Purdy0228/ConvMemory-LoCoMo-MPNet",
         device: str = "cpu",
         top_n: int = 10,
+        order_key: str = "created_at",
         **kwargs,
     ):
-        super().__init__(top_n=top_n, **kwargs)
+        super().__init__(top_n=top_n, order_key=order_key, **kwargs)
         self._reranker = reranker or ConvMemory.from_pretrained(checkpoint, device=device)
 
     @classmethod
@@ -62,6 +67,15 @@ class ConvMemoryPostprocessor(BaseNodePostprocessor):
             return []
         if query_bundle is None:
             raise ValueError("ConvMemoryPostprocessor requires a query bundle.")
+        keys = [node.node.metadata.get(self.order_key) for node in nodes]
+        if any(key is None for key in keys):
+            warnings.warn(
+                f"ConvMemory: some nodes have no metadata['{self.order_key}'], so they stay in "
+                "similarity order, which lowers reranking quality. Set order_key= to fix.",
+                stacklevel=2,
+            )
+        else:
+            nodes = [nodes[i] for i in sorted(range(len(nodes)), key=lambda i: keys[i])]
 
         memories = [
             {"id": node.node.node_id, "text": node.node.get_content()} for node in nodes
@@ -91,9 +105,12 @@ if __name__ == "__main__":
 
     postprocessor = ConvMemoryPostprocessor(top_n=3)
     nodes = [
-        NodeWithScore(node=TextNode(id_="m1", text="User: we moved the analytics store to ClickHouse"), score=0.4),
-        NodeWithScore(node=TextNode(id_="m2", text="User: the offsite is in Porto in May"), score=0.3),
-        NodeWithScore(node=TextNode(id_="m3", text="User: Postgres was the original analytics store"), score=0.2),
+        NodeWithScore(node=TextNode(id_="m1", text="User: we moved the analytics store to ClickHouse",
+                                    metadata={"created_at": "2026-03-02T10:00:00"}), score=0.4),
+        NodeWithScore(node=TextNode(id_="m2", text="User: the offsite is in Porto in May",
+                                    metadata={"created_at": "2026-02-11T09:30:00"}), score=0.3),
+        NodeWithScore(node=TextNode(id_="m3", text="User: Postgres was the original analytics store",
+                                    metadata={"created_at": "2026-01-05T16:20:00"}), score=0.2),
     ]
     for node in postprocessor.postprocess_nodes(
         nodes, query_bundle=QueryBundle("what database do we use for analytics?")
