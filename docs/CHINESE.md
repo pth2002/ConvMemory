@@ -72,9 +72,17 @@ reports R@10 0.9913, Hit@1 0.7442, and MRR 0.8484.
 **Scope warning.** In warm-memory pool scans, the student is much faster than the
 online teacher for large candidate pools. But the phase-0 gate did **not** show a
 statistically robust improvement over `BAAI/bge-base-zh-v1.5` cosine retrieval,
-so small candidate pools may be better served by the dense retriever alone. Use
-this checkpoint when the pool is large enough that a cross-encoder is too
-expensive and dense recall is degrading — not as a default upgrade over dense.
+so small candidate pools may be better served by the dense retriever alone.
+
+The student was trained on 20-candidate pools. On held-out LoCoMo (Chinese
+translation), pools of 20 to 200 work, and a 500-candidate pool falls below the
+dense retriever (hit@10 520 vs 539 of 937), so keep the pool at 200 or below.
+Its bge-base-zh-v1.5 space is also weak on English memories, so for mixed zh/en
+stores a multilingual retriever such as bge-m3 is the better base
+([issue #1](https://github.com/pth2002/ConvMemory/issues/1),
+[checks](https://github.com/pth2002/ConvMemory/tree/main/experiments/issue_1)).
+Use this checkpoint on Chinese memory when a cross-encoder is too expensive, not
+as a default upgrade over dense.
 
 ## OPC-v3 Validity Context Module
 
