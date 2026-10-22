@@ -40,4 +40,27 @@ The hand-off makes no measurable difference for the OPC student (12 vs 11,
 11 vs 9, 16 vs 9). bge-m3's ColBERT and combined scores help on English pairs and
 do not help on Chinese or cross-lingual pairs.
 
-Raw outputs: `order_check_results.json`, `m3_and_opc_check_results.json`.
+## 3. Candidate pool size
+
+`pool_size_check.py`, asked about in issue #1 because of the `ref500` arm above
+(whole store, 500-candidate pool). Every arm passes the whole store plus
+`candidate_indices` = dense top-N in the model's own space. Quality runs on the
+GPU, and CPU latency is the median over the first 100 questions.
+
+| hit@10 of 937 | pool 20 | pool 60 | pool 200 | pool 500 |
+|---|---|---|---|---|
+| English v1, en → en (trained on 500-candidate pools) | 645 | 719 | 759 | 770 |
+| OPC student, zh → zh (trained on 20-candidate pools) | 552 | 553 | 556 | 520 |
+| OPC student, zh → en | 376 | 380 | 394 | 386 |
+| OPC student, en → en | 408 | 413 | 419 | 409 |
+
+A pool near the checkpoint's training pool works best. The English checkpoint
+keeps improving up to 500 candidates (64 vs 13 against pool 60, p = 3e-9). The
+OPC student holds up to 200 and drops at 500 on zh → zh (32 vs 65 against
+pool 60, p = 0.001), below its own dense retriever (539). CPU time per query
+from pool 20 to 500 is 56 to 68 ms for the English checkpoint and 62 to 80 ms for
+the OPC student. This GPU run differs by one question from the CPU run in
+section 1 (719 vs 718 at pool 60).
+
+Raw outputs: `order_check_results.json`, `m3_and_opc_check_results.json`,
+`pool_size_check_results.json`.

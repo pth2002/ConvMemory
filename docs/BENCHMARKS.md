@@ -238,6 +238,33 @@ HotpotQA, a trivial dense+lexical baseline is stronger. On MuSiQue, ConvMemory
 regresses below raw dense. This is a scope boundary: ConvMemory is a memory
 reranker, not a general multi-hop document reranker.
 
+## Third-party report: a real zh/en memory store
+
+[Issue #1](https://github.com/pth2002/ConvMemory/issues/1), reported by
+@2008924 with their own harness: a personal multi-agent memory store (OpenViking,
+about 4.1k Chinese/English markdown files, 1,652 memory units), bge-m3 dense
+top-60, CPU only.
+
+| arm, 96 real queries | hit@10 | vs raw (helped / harmed) | 60 candidates on their CPU |
+|---|---:|---|---:|
+| raw bge-m3 dense | 62.5 | | 0 |
+| ConvMemory retrained in the bge-m3 space | 62.5 | 6 / 6 | 10 to 16 ms |
+| bge-reranker-base (278M) | 57.3 | 7 / 12 | ~9 s |
+| bce-reranker-base_v1 (279M) | 60.4 | 8 / 10 | ~10 s |
+| bge-reranker-v2-m3 (568M) | 65.6 | 8 / 5 | ~28 s |
+| Qwen3-Reranker-0.6B | 68.8 | 12 / 6 | ~50 s |
+
+No delta is significant at n = 96. On their 822-query de-lexicalized synthetic
+set, the official Chinese checkpoint was also flat against its own dense
+retriever (9 helped, 9 harmed on hit@5). The report also documents a llama.cpp
+pitfall for XLM-R rerankers: `llama-quantize` drops
+`tokenizer.ggml.add_sep_token`, which silently degrades a quantized reranker.
+
+Follow-up checks are in
+[`experiments/issue_1/`](https://github.com/pth2002/ConvMemory/tree/main/experiments/issue_1):
+how the candidate pool is handed over, the Chinese checkpoint's embedding space,
+bge-m3's own ColBERT and sparse heads as rerankers, and the candidate pool size.
+
 ## Where ConvMemory fails
 
 - Non-temporal multi-hop retrieval: MuSiQue is negative against raw dense.
@@ -249,3 +276,8 @@ reranker, not a general multi-hop document reranker.
   confidence without application-specific validation.
 - Mechanism attribution: v0.51 does not support temporal structure as the
   load-bearing explanation for ConvMemory's gain.
+- De-lexicalized and cross-lingual queries over a strong multilingual retriever:
+  flat against bge-m3 on a real zh/en store (issue #1) and in the follow-up checks.
+- The OPC Chinese student on English or mixed memories: its bge-base-zh-v1.5
+  space retrieves English memories poorly. It was trained on 20-candidate pools
+  and gets worse at 500.

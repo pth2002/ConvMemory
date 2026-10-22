@@ -14,6 +14,12 @@
 - Added `experiments/issue_1/`: the hand-off check above, plus a check of the
   Chinese OPC student and of bge-m3's ColBERT and sparse heads as rerankers
   over a bge-m3 top-60.
+- Added `experiments/issue_1/pool_size_check.py`: the English checkpoint
+  improves up to 500 candidates (hit@10 719 of 937 at 60, 770 at 500), while the
+  OPC Chinese student, trained on 20-candidate pools, holds up to 200 and drops
+  at 500. `docs/CHINESE.md` now says to keep its pool at 200 or below.
+- `docs/BENCHMARKS.md` gains a third-party report section for the real zh/en
+  memory store in issue #1, credited to @2008924.
 - No model, checkpoint, or ranking behaviour changed.
 
 ## 0.7.0 - 2026-08-09
